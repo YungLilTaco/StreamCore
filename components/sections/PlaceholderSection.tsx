@@ -14,7 +14,7 @@ export function PlaceholderSection({
 }) {
   return (
     <section id={id} className="relative pt-14 md:pt-20">
-      <div className="mx-auto max-w-6xl px-4">
+      <div className="mx-auto max-w-7xl px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}

@@ -15,7 +15,7 @@ export default function Page() {
         <div className="pointer-events-none absolute inset-0 sv-grid opacity-[0.18]" />
         <Header />
 
-        <div className="mx-auto flex max-w-[1220px] gap-0">
+        <div className="mx-auto flex w-full max-w-[1480px] gap-0 px-4">
           <Sidebar />
 
           <main className="min-w-0 flex-1">

@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 export function MasterOverlay() {
   return (
     <section id="overlays" className="relative pt-14 md:pt-20">
-      <div className="mx-auto max-w-6xl px-4">
+      <div className="mx-auto max-w-7xl px-4">
         <div className="grid gap-10 md:grid-cols-2 md:items-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}

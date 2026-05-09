@@ -11,7 +11,7 @@ export function Header() {
     <div className="sticky top-0 z-50">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/80 to-black/0" />
       <header className="relative border-b border-white/10 bg-black/30 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
           <Link href="#" className="flex items-center gap-2">
             <span
               className={cn(
