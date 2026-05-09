@@ -29,7 +29,7 @@ type Item = {
 };
 
 const items: Item[] = [
-  { href: "/app/live-dashboard", label: "Live Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+  { href: "/dashboard", label: "Live Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
   { href: "/app/overlay-editor", label: "Overlay editor", icon: <Palette className="h-4 w-4" /> },
   { href: "/app/streamvault-bot", label: "StreamVault bot", icon: <Bot className="h-4 w-4" /> },
   { href: "/app/now-playing-animation", label: "Now playing animation", icon: <Wand2 className="h-4 w-4" /> },

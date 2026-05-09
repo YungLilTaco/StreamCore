@@ -208,7 +208,7 @@ export function DashboardGrid({
           margin={[14, 14]}
           containerPadding={[0, 0]}
           draggableHandle=".sv-drag-handle"
-          onLayoutsChange={(next) => setLayouts(next)}
+          onLayoutChange={(_current, all) => setLayouts(all)}
           onBreakpointChange={(bp) => setBreakpoint(bp as keyof Layouts)}
           isResizable
           isDraggable
@@ -216,7 +216,9 @@ export function DashboardGrid({
           isDroppable
           droppingItem={{ i: "__dropping__", w: DEFAULT_DOCK_W, h: DEFAULT_DOCK_H }}
           onDrop={(_layout, item, e) => {
-            const raw = e?.dataTransfer?.getData("application/x-streamvault-dock");
+            const raw = (e as DragEvent)?.dataTransfer?.getData(
+              "application/x-streamvault-dock"
+            );
             const key = raw as DockKey;
             if (!raw) return;
             addDock(key, { x: item.x, y: item.y, w: item.w, h: item.h });

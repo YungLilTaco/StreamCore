@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Broom, Megaphone, BarChartHorizontal, BadgePercent } from "lucide-react";
+import { Eraser, Megaphone, BarChartHorizontal, BadgePercent } from "lucide-react";
 import { DockShell } from "@/components/dashboard/docks/DockShell";
 import { Button } from "@/components/ui/button";
 
@@ -39,7 +39,7 @@ export function QuickActionsDock({
             Shoutout
           </Button>
           <Button variant="secondary" onClick={() => notify("Chat cleared")}>
-            <Broom className="h-4 w-4" />
+            <Eraser className="h-4 w-4" />
             Clear Chat
           </Button>
           <Button variant="secondary" onClick={() => notify("Poll started")}>
