@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StreamVault Dashboard</title>
+  <link href="https://fonts.googleapis.com/css?family=Inter:400,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">Stream<span style="color:var(--text-secondary)">Vault</span></div>
+    <nav>
+      <a href="#home" class="active">
+        <span class="nav-ic" aria-hidden="true">⌂</span>
+        <span class="label">Home</span>
+      </a>
+      <a href="#live-dashboard">
+        <span class="nav-ic" aria-hidden="true">◉</span>
+        <span class="label">Live Dashboard</span>
+      </a>
+      <a href="#overlay-editor">
+        <span class="nav-ic" aria-hidden="true">▦</span>
+        <span class="label">Overlay editor</span>
+      </a>
+      <a href="#streamvault-bot">
+        <span class="nav-ic" aria-hidden="true">⚙</span>
+        <span class="label">StreamVault bot</span>
+      </a>
+      <a href="#now-playing-animation">
+        <span class="nav-ic" aria-hidden="true">♪</span>
+        <span class="label">Now playing animation</span>
+      </a>
+      <a href="#song-requests">
+        <span class="nav-ic" aria-hidden="true">♫</span>
+        <span class="label">Song requests</span>
+      </a>
+      <a href="#shoutout-clip-player">
+        <span class="nav-ic" aria-hidden="true">▶</span>
+        <span class="label">Shoutout Clip player</span>
+      </a>
+      <a href="#random-clip-player">
+        <span class="nav-ic" aria-hidden="true">⟲</span>
+        <span class="label">Random Clip player</span>
+      </a>
+      <a href="#stream-spirits">
+        <span class="nav-ic" aria-hidden="true">✦</span>
+        <span class="label">Stream Spirits</span>
+      </a>
+      <a href="#tts-bot">
+        <span class="nav-ic" aria-hidden="true">T</span>
+        <span class="label">TTS Bot</span>
+      </a>
+      <a href="#green-screen-videos">
+        <span class="nav-ic" aria-hidden="true">▣</span>
+        <span class="label">Green screen videos</span>
+      </a>
+      <a href="#sound-alerts">
+        <span class="nav-ic" aria-hidden="true">🔊</span>
+        <span class="label">Sound alerts</span>
+      </a>
+      <a href="#marketplace">
+        <span class="nav-ic" aria-hidden="true">⧉</span>
+        <span class="label">marketplace</span>
+      </a>
+      <a href="#analytics">
+        <span class="nav-ic" aria-hidden="true">▤</span>
+        <span class="label">Analytics</span>
+      </a>
+    </nav>
+  </aside>
+  <header class="navbar">
+    <div class="nav-title" id="pageTitle">Home</div>
+    <div class="navbar-actions">
+      <span style="color: var(--purple); font-weight:600; font-size: 1.1em;">🔔</span>
+      <span class="avatar">SJ</span>
+    </div>
+  </header>
+  <main class="main-content">
+    <h1 id="pageHeading" style="color:var(--purple);margin-top:0;">Home</h1>
+    <p id="pageDescription" style="color: var(--text-secondary); max-width:600px;">Kies links een pagina om te beginnen.</p>
+    <!-- Hier komt dynamische content van jouw streamer tools -->
+    <div id="pageBody" style="margin-top:36px;display:grid;grid-template-columns: repeat(auto-fit,minmax(260px,1fr));gap:24px;">
+      <div style="background:var(--bg-darker);border-radius:16px;padding:24px;box-shadow:0 2px 8px #0002;">
+        <h2 style="color:var(--purple);margin:0 0 10px;">Live Kijkers</h2>
+        <div style="font-size:2.2em;font-weight:700;">123</div>
+      </div>
+      <div style="background:var(--bg-darker);border-radius:16px;padding:24px;box-shadow:0 2px 8px #0002;">
+        <h2 style="color:var(--purple);margin:0 0 10px;">Volgers Totaal</h2>
+        <div style="font-size:2.2em;font-weight:700;">4,329</div>
+      </div>
+      <div style="background:var(--bg-darker);border-radius:16px;padding:24px;box-shadow:0 2px 8px #0002;">
+        <h2 style="color:var(--purple);margin:0 0 10px;">Laatste Donatie</h2>
+        <div style="font-size:1.3em;">@StreamerFan <span style="color:var(--purple);font-weight:600;">€12,50</span></div>
+      </div>
+    </div>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
+

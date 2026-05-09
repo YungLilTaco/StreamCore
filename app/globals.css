@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-black text-foreground antialiased;
+}
+
+/* Subtle grid + vignette */
+.sv-bg {
+  background-image:
+    radial-gradient(900px circle at 50% -10%, rgba(168, 85, 247, 0.25), transparent 55%),
+    radial-gradient(700px circle at 90% 20%, rgba(56, 189, 248, 0.12), transparent 55%),
+    radial-gradient(700px circle at 10% 50%, rgba(168, 85, 247, 0.10), transparent 55%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.0), rgba(0, 0, 0, 0.75));
+}
+
+.sv-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(65% 55% at 50% 25%, rgba(0, 0, 0, 1) 40%, transparent 85%);
+}
+
+/* Subtle gradient shimmer for hero headline */
+.sv-shimmer {
+  background-image: linear-gradient(
+    110deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(168, 85, 247, 0.95) 22%,
+    rgba(255, 255, 255, 0.92) 44%,
+    rgba(56, 189, 248, 0.55) 62%,
+    rgba(255, 255, 255, 0.92) 80%
+  );
+  background-size: 220% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sv-shimmer 3.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sv-shimmer {
+    animation: none;
+  }
+}
+
+@keyframes sv-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
