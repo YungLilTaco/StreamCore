@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streamer Hub Dashboard</title>
+  <link href="https://fonts.googleapis.com/css?family=Inter:400,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">Streamer<span style="color:var(--text-secondary)">Hub</span></div>
+    <nav>
+      <a href="#" class="active">
+        <span class="nav-ic" aria-hidden="true">⌂</span>
+        <span class="label">Command Center</span>
+      </a>
+      <a href="#">
+        <span class="nav-ic" aria-hidden="true">⚙</span>
+        <span class="label">Bot &amp; Logic</span>
+      </a>
+      <a href="#">
+        <span class="nav-ic" aria-hidden="true">♫</span>
+        <span class="label">Media &amp; Music</span>
+      </a>
+      <a href="#">
+        <span class="nav-ic" aria-hidden="true">▦</span>
+        <span class="label">Overlay Suite</span>
+      </a>
+      <a href="#">
+        <span class="nav-ic" aria-hidden="true">▤</span>
+        <span class="label">Analytics</span>
+      </a>
+    </nav>
+  </aside>
+  <header class="navbar">
+    <div class="nav-title">Dashboard</div>
+    <div class="navbar-actions">
+      <span style="color: var(--purple); font-weight:600; font-size: 1.1em;">🔔</span>
+      <span class="avatar">SJ</span>
+    </div>
+  </header>
+  <main class="main-content">
+    <h1 style="color:var(--purple);margin-top:0;">Welkom bij je Streamer Hub!</h1>
+    <p style="color: var(--text-secondary); max-width:600px;">Dit is het centrale dashboard van jouw streamer-hub. Voeg eenvoudig widgets toe, monitor je statistieken, en beheer eenvoudig alles wat met je streams te maken heeft – allemaal in één overzichtelijk, strak dark mode dashboard met Twitch paarse accenten.</p>
+    <!-- Hier komt dynamische content van jouw streamer tools -->
+    <div style="margin-top:36px;display:grid;grid-template-columns: repeat(auto-fit,minmax(260px,1fr));gap:24px;">
+      <div style="background:var(--bg-darker);border-radius:16px;padding:24px;box-shadow:0 2px 8px #0002;">
+        <h2 style="color:var(--purple);margin:0 0 10px;">Live Kijkers</h2>
+        <div style="font-size:2.2em;font-weight:700;">123</div>
+      </div>
+      <div style="background:var(--bg-darker);border-radius:16px;padding:24px;box-shadow:0 2px 8px #0002;">
+        <h2 style="color:var(--purple);margin:0 0 10px;">Volgers Totaal</h2>
+        <div style="font-size:2.2em;font-weight:700;">4,329</div>
+      </div>
+      <div style="background:var(--bg-darker);border-radius:16px;padding:24px;box-shadow:0 2px 8px #0002;">
+        <h2 style="color:var(--purple);margin:0 0 10px;">Laatste Donatie</h2>
+        <div style="font-size:1.3em;">@StreamerFan <span style="color:var(--purple);font-weight:600;">€12,50</span></div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
