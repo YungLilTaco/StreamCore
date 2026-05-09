@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+@import "react-grid-layout/css/styles.css";
+@import "react-resizable/css/styles.css";
+
 :root {
   color-scheme: dark;
 }
@@ -66,5 +69,19 @@ body {
   100% {
     background-position: 0% 50%;
   }
+}
+
+/* react-grid-layout dark theme tweaks */
+.react-grid-item > .react-resizable-handle {
+  filter: brightness(1.1);
+  opacity: 0.7;
+}
+.react-grid-item.react-draggable-dragging {
+  z-index: 50;
+}
+.react-grid-placeholder {
+  background: rgba(168, 85, 247, 0.18) !important;
+  border: 1px solid rgba(168, 85, 247, 0.35) !important;
+  border-radius: 12px;
 }
 

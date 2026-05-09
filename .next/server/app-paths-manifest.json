@@ -1,3 +1,13 @@
 {
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/login/page": "app/login/page.js",
+  "/app/page": "app/app/page.js",
+  "/app/live-dashboard/page": "app/app/live-dashboard/page.js",
+  "/app/overlay-editor/page": "app/app/overlay-editor/page.js",
+  "/app/now-playing-animation/page": "app/app/now-playing-animation/page.js",
+  "/app/shoutout-clip-player/page": "app/app/shoutout-clip-player/page.js",
+  "/app/tts-bot/page": "app/app/tts-bot/page.js",
+  "/app/sound-alerts/page": "app/app/sound-alerts/page.js",
+  "/app/marketplace/page": "app/app/marketplace/page.js",
+  "/app/analytics/page": "app/app/analytics/page.js"
 }
