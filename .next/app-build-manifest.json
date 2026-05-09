@@ -6,16 +6,6 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/page.js"
-    ],
-    "/login/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/login/page.js"
-    ],
     "/app/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -26,70 +16,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/app/page.js"
     ],
-    "/app/overlay-editor/page": [
+    "/dashboard/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/app/overlay-editor/page.js"
+      "static/chunks/app/dashboard/layout.js"
     ],
-    "/app/streamvault-bot/page": [
+    "/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/app/streamvault-bot/page.js"
-    ],
-    "/app/now-playing-animation/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/now-playing-animation/page.js"
-    ],
-    "/app/song-requests/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/song-requests/page.js"
-    ],
-    "/app/live-dashboard/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/live-dashboard/page.js"
-    ],
-    "/app/shoutout-clip-player/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/shoutout-clip-player/page.js"
-    ],
-    "/app/random-clip-player/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/random-clip-player/page.js"
-    ],
-    "/app/stream-spirits/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/stream-spirits/page.js"
-    ],
-    "/app/tts-bot/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/tts-bot/page.js"
-    ],
-    "/app/green-screen-videos/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/green-screen-videos/page.js"
-    ],
-    "/app/sound-alerts/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/sound-alerts/page.js"
-    ],
-    "/app/marketplace/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/marketplace/page.js"
-    ],
-    "/app/analytics/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/app/analytics/page.js"
+      "static/chunks/app/dashboard/page.js"
     ]
   }
 }
