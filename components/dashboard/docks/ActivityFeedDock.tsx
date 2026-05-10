@@ -98,8 +98,10 @@ export function ActivityFeedDock({
           <div className="space-y-2">
             {items.length === 0 && !loading && ready && channelTwitchId ? (
               <div className="text-sm text-white/50">
-                No recent follower/subscriber rows returned yet. Twitch only exposes what your token can read (e.g.
-                subscribers need the broadcaster&apos;s auth). Real-time cheers, raids, and redemptions need EventSub.
+                No activity rows yet. This dock uses Twitch Helix snapshots: recent follows, subs, and channel-points
+                redemptions (broadcaster OAuth with the right scopes). Bits, raids, hype trains, and hype chat are not
+                in the REST APIs we call — those need an EventSub/WebSocket bridge. Donations are typically
+                StreamLabs/StreamElements, not Twitch Helix.
               </div>
             ) : null}
             {items.map((e) => (

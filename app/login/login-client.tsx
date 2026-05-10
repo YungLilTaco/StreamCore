@@ -9,7 +9,7 @@ import { cn } from "@/components/lib/cn";
 
 const authErrorMessages: Record<string, string> = {
   Configuration:
-    "The server rejected the sign-in because Auth.js isn’t configured for production yet. On Vercel: open Project → Settings → Environment Variables for Production (and Preview, if needed) and set AUTH_SECRET (or NEXTAUTH_SECRET) to a random string — run `openssl rand -base64 32` locally and paste it. Redeploy. Also verify DATABASE_URL, TWITCH_CLIENT_ID, and TWITCH_CLIENT_SECRET are set (no empty values).",
+    "This code is used for several different server failures — not only missing secrets. (1) Running `npm run dev` only affects localhost; the live site reads variables from Vercel only. After changing any env var, open Vercel → Deployments → ⋮ on the latest deploy → Redeploy — a new production build must run. (2) Ensure `AUTH_SECRET` is set under Environment = Production (same for `DATABASE_URL`, Twitch keys, `NEXTAUTH_URL` or `AUTH_URL`). You can duplicate the same random string into `NEXTAUTH_SECRET` if you want belt-and-suspenders. (3) Auth.js also shows `Configuration` when the database adapter throws (e.g. bad `DATABASE_URL`, pooler SSL, Prisma errors) — check Deployment → Logs during a sign-in attempt. (4) Temporary: add `AUTH_DIAG=1`, redeploy, open `/api/debug/auth` on your live domain to see which checks fail.",
   AccessDenied: "Twitch sign-in was cancelled or refused.",
   Verification: "The sign-in link expired or was already used. Try again.",
   OAuthSignin: "Could not start Twitch sign-in (configuration or Twitch app settings).",

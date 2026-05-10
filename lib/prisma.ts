@@ -13,11 +13,25 @@ declare global {
 function prismaRuntimeDatabaseUrl(raw: string | undefined): string | undefined {
   if (!raw?.trim()) return raw;
   try {
-    const u = new URL(raw);
-    if (u.port !== "6543") return raw;
-    if (u.searchParams.get("pgbouncer") === "true") return raw;
     const next = new URL(raw);
-    next.searchParams.set("pgbouncer", "true");
+    const host = next.hostname.toLowerCase();
+
+    // Supabase Transaction pooler (:6543) — Prisma requires pgbouncer mode (avoids prepared statement errors).
+    if (next.port === "6543" && next.searchParams.get("pgbouncer") !== "true") {
+      next.searchParams.set("pgbouncer", "true");
+    }
+
+    // Hosted Postgres usually expects TLS when connecting from serverless (Vercel ↔ Supabase/Neon).
+    if (
+      host.includes("supabase") ||
+      host.includes("pooler.supabase.com") ||
+      host.includes("neon.tech")
+    ) {
+      if (!next.searchParams.has("sslmode") && !next.searchParams.has("ssl")) {
+        next.searchParams.set("sslmode", "require");
+      }
+    }
+
     return next.toString();
   } catch {
     return raw;

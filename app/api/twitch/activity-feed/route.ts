@@ -94,6 +94,8 @@ export async function GET(req: Request) {
     }
   }
 
+  /** Helix subscriptions do not expose “subscribed at” timestamps; sorting them with artificial `Date.now()` hid follows. */
+  const subItems: ActivityItem[] = [];
   const subsRes = await fetch(
     `https://api.twitch.tv/helix/subscriptions?broadcaster_id=${encodeURIComponent(channelTwitchId)}&first=15`,
     { headers, cache: "no-store" }
@@ -117,14 +119,13 @@ export async function GET(req: Request) {
       const text = s.is_gift
         ? `${s.gifter_name || s.gifter_login || "Someone"} gifted ${s.user_name || s.user_login} a ${tier} sub`
         : `${s.user_name || s.user_login} subscribed (${tier})`;
-      const ts = Date.now() - i * 1000;
       i += 1;
-      items.push({
+      subItems.push({
         id: `sub-${s.user_id}-${i}`,
         kind,
         text,
-        at: "Recent",
-        ts
+        at: "Active sub (Helix doesn’t expose subbed-at)",
+        ts: 0
       });
     }
   } else {
@@ -137,11 +138,81 @@ export async function GET(req: Request) {
     }
   }
 
-  items.sort((a, b) => b.ts - a.ts);
+  /** Channel Points redemptions (REST snapshot; needs `channel:read:redemptions`). */
+  const redeemItems: ActivityItem[] = [];
+  const rewardsRes = await fetch(
+    `https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id=${encodeURIComponent(channelTwitchId)}&first=15`,
+    { headers, cache: "no-store" }
+  );
+  if (rewardsRes.ok) {
+    const rewardsJson = (await rewardsRes.json()) as {
+      data?: { id: string; title?: string }[];
+    };
+    const rewards = rewardsJson.data ?? [];
+    const statuses = ["UNFULFILLED", "FULFILLED"] as const;
+
+    await Promise.all(
+      rewards.slice(0, 8).map(async (reward) => {
+        for (const status of statuses) {
+          const rRes = await fetch(
+            `https://api.twitch.tv/helix/channel_points/custom_rewards/redemptions?broadcaster_id=${encodeURIComponent(
+              channelTwitchId
+            )}&reward_id=${encodeURIComponent(reward.id)}&status=${status}&first=5`,
+            { headers, cache: "no-store" }
+          );
+          if (!rRes.ok) continue;
+          const rJson = (await rRes.json()) as {
+            data?: {
+              id: string;
+              user_name?: string;
+              user_login?: string;
+              redeemed_at?: string;
+              reward?: { title?: string };
+            }[];
+          };
+          for (const row of rJson.data ?? []) {
+            const redeemedAt = row.redeemed_at;
+            const ts = redeemedAt ? Date.parse(redeemedAt) : 0;
+            const title = reward.title || row.reward?.title || "Channel Points";
+            const who = row.user_name || row.user_login || "Someone";
+            const st = status === "UNFULFILLED" ? "pending" : "fulfilled";
+            redeemItems.push({
+              id: `cp-${reward.id}-${row.id}`,
+              kind: "points",
+              text: `${who}: ${title} (${st})`,
+              at: formatWhen(redeemedAt),
+              ts: Number.isNaN(ts) ? 0 : ts
+            });
+          }
+        }
+      })
+    );
+  } else {
+    const txt = await rewardsRes.text();
+    try {
+      const j = JSON.parse(txt) as { message?: string };
+      if (j.message) errors.push(`Channel Points: ${j.message}`);
+    } catch {
+      if (rewardsRes.status === 403) errors.push("Channel Points: needs broadcaster token with channel:read:redemptions.");
+    }
+  }
+
+  const seenCp = new Set<string>();
+  const redeemDeduped = redeemItems.filter((row) => {
+    if (seenCp.has(row.id)) return false;
+    seenCp.add(row.id);
+    return true;
+  });
+  redeemDeduped.sort((a, b) => b.ts - a.ts);
+
+  /** Newest redeem + follower activity first (real timestamps); subs are a snapshot and appended below. */
+  const followSorted = [...items].sort((a, b) => b.ts - a.ts);
+  const timedCombined = [...redeemDeduped, ...followSorted].sort((a, b) => b.ts - a.ts);
+  const merged = [...timedCombined.slice(0, 22), ...subItems.slice(0, 10)];
 
   return Response.json({
     channelTwitchId,
-    items: items.slice(0, 25),
+    items: merged.slice(0, 26),
     partial: errors.length > 0,
     warnings: errors
   });
