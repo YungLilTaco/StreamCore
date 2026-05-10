@@ -31,7 +31,7 @@ type Item = {
 };
 
 const items: Item[] = [
-  { href: "/dashboard", label: "navLiveDashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+  { href: "/app/dashboard", label: "navLiveDashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
   { href: "/app/overlay-editor", label: "navOverlayEditor", icon: <Palette className="h-4 w-4" /> },
   { href: "/app/streamcore-bot", label: "navBot", icon: <Bot className="h-4 w-4" /> },
   { href: "/app/now-playing-animation", label: "navNowPlaying", icon: <Wand2 className="h-4 w-4" /> },

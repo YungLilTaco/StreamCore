@@ -53,7 +53,7 @@ export function Hero() {
               <Button
                 variant="secondary"
                 className="h-11 w-full px-6 sm:w-auto"
-                onClick={() => router.push("/dashboard")}
+                onClick={() => router.push("/app/dashboard")}
               >
                 Open Dashboard
               </Button>

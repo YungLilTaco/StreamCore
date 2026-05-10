@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
         <div className="mx-auto flex w-full max-w-[1480px] gap-0 px-4">
           <Sidebar />
-          {children}
+          <div className="min-w-0 flex-1">{children}</div>
         </div>
 
         <Footer />

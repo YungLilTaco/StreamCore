@@ -31,7 +31,7 @@ export function InviteClient({
       });
       if (!res.ok) throw new Error(await res.text());
       setDone("Accepted. You can close this tab.");
-      window.location.href = "/dashboard";
+      window.location.href = "/app/dashboard";
     } catch {
       setDone("Failed to accept invite.");
     } finally {
