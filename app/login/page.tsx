@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Vault, LogIn } from "lucide-react";
+import { Cpu, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { isAuthedClient, setAuthedClient } from "@/components/auth/auth";
@@ -30,10 +30,10 @@ export default function LoginPage() {
           <Card className="w-full max-w-md p-6">
             <div className="flex items-center gap-3">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 ring-1 ring-primary/25">
-                <Vault className="h-5 w-5 text-white" />
+                <Cpu className="h-5 w-5 text-white" />
               </span>
               <div>
-                <div className="text-sm font-semibold text-white">StreamVault</div>
+                <div className="text-sm font-semibold text-white">StreamCore</div>
                 <div className="text-xs text-white/60">
                   Demo login (no backend yet)
                 </div>

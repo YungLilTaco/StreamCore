@@ -1,6 +1,6 @@
 "use client";
 
-import { Vault } from "lucide-react";
+import { Cpu } from "lucide-react";
 
 export function Footer() {
   return (
@@ -9,11 +9,11 @@ export function Footer() {
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.04] ring-1 ring-white/10">
-              <Vault className="h-5 w-5 text-primary" />
+              <Cpu className="h-5 w-5 text-primary" />
             </span>
             <div>
               <div className="text-sm font-semibold text-white">
-                Stream<span className="text-white/70">Vault</span>
+                Stream<span className="text-white/70">Core</span>
               </div>
               <div className="text-xs text-white/55">
                 High-tech tools for modern streamers.
@@ -38,7 +38,7 @@ export function Footer() {
         </div>
 
         <div className="mt-8 flex flex-col gap-2 border-t border-white/10 pt-6 text-xs text-white/50 md:flex-row md:items-center md:justify-between">
-          <span>© {new Date().getFullYear()} StreamVault. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} StreamCore. All rights reserved.</span>
           <span>Electric Purple: #A855F7</span>
         </div>
       </div>

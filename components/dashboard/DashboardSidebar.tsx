@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 
 const nav = [
   { href: "/dashboard", label: "Live Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
-  { href: "/app/streamvault-bot", label: "Bot & Logic", icon: <Bot className="h-4 w-4" /> },
+  { href: "/app/streamcore-bot", label: "Bot & Logic", icon: <Bot className="h-4 w-4" /> },
   { href: "/app/song-requests", label: "Media & Music", icon: <Music2 className="h-4 w-4" /> },
-  { href: "/app/marketplace", label: "Vault Marketplace", icon: <ShoppingBag className="h-4 w-4" /> },
+  { href: "/app/marketplace", label: "Core Marketplace", icon: <ShoppingBag className="h-4 w-4" /> },
   { href: "/app/overlay-editor", label: "Overlay Suite", icon: <Video className="h-4 w-4" /> }
 ];
 

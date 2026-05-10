@@ -1,6 +1,6 @@
-# StreamVault (Next.js)
+# StreamCore (Next.js)
 
-Modern StreamVault homepage built with Next.js (App Router), Tailwind CSS, Lucide icons, and Framer Motion.
+Modern StreamCore homepage built with Next.js (App Router), Tailwind CSS, Lucide icons, and Framer Motion.
 
 ## Getting started
 

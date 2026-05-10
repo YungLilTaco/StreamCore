@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { motion } from "@/components/motion/motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,6 +12,7 @@ const fadeUp = {
 };
 
 export function Hero() {
+  const router = useRouter();
   return (
     <section id="home" className="relative pt-14 md:pt-20">
       <div className="mx-auto max-w-7xl px-4">
@@ -23,15 +25,16 @@ export function Hero() {
         >
           <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white/70 backdrop-blur">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Built for streamers who hate tab-overload
+            Built for streamers who demand stability
           </div>
 
           <h1 className="text-balance text-4xl font-semibold tracking-tight md:text-6xl">
-            <span className="sv-shimmer">The Ultimate Cockpit for Modern Streamers.</span>
+            <span className="sv-shimmer">One Tab. One Core. Total Command.</span>
           </h1>
           <p className="mt-5 text-pretty text-base leading-relaxed text-white/70 md:text-lg">
-            Eliminate tab-overload. Centralize your chatbot, music, and overlays into one powerful
-            cloud-based dashboard.
+            Stop jumping between tabs. Centralize your bots, overlays, and Spotify controls into
+            one high-performance command center. Built by a Software Test Engineer and long-time
+            Twitch power-user for maximum stability.
           </p>
 
           <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
@@ -39,8 +42,9 @@ export function Hero() {
               <Button
                 variant="primary"
                 className="h-11 w-full px-6 shadow-glow-purple sm:w-auto"
+                onClick={() => router.push("/login")}
               >
-                Get Started for Free
+                Get Started with Twitch
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </motion.div>
@@ -49,12 +53,9 @@ export function Hero() {
               <Button
                 variant="secondary"
                 className="h-11 w-full px-6 sm:w-auto"
-                onClick={() => {
-                  const el = document.getElementById("features");
-                  el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }}
+                onClick={() => router.push("/dashboard")}
               >
-                View Features
+                Open Dashboard
               </Button>
             </motion.div>
           </div>
@@ -73,9 +74,9 @@ export function Hero() {
             <div className="absolute -right-24 -bottom-24 h-72 w-72 rounded-full bg-sky-400/10 blur-3xl" />
 
             <div className="relative grid gap-6 p-6 md:grid-cols-3 md:gap-8 md:p-8">
-              <MiniStat title="Scenes" value="12" sub="Synced templates" />
-              <MiniStat title="Commands" value="84" sub="AI-generated logic" />
-              <MiniStat title="Overlays" value="1" sub="Master browser source" />
+              <MiniStat title="Docks" value="∞" sub="Drag • resize • persist" />
+              <MiniStat title="Latency" value="Low" sub="Fast UI, minimal bloat" />
+              <MiniStat title="Stability" value="First" sub="Built like production software" />
             </div>
           </Card>
         </motion.div>

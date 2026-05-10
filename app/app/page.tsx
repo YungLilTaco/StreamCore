@@ -5,7 +5,7 @@ import { AppPage } from "@/components/app/AppPage";
 export default function AppHome() {
   return (
     <AppPage
-      title="Welcome to StreamVault"
+      title="Welcome to StreamCore"
       description="This is your in-app home: quick orientation, what each page does, and how to get value fast."
     >
       <div className="grid gap-4 md:grid-cols-3">
@@ -32,7 +32,7 @@ export default function AppHome() {
       </div>
 
       <div className="mt-6 rounded-lg border border-white/10 bg-white/[0.03] p-4 text-sm text-white/70">
-        Tip: Click <span className="font-semibold text-white">StreamVault</span> in the top bar anytime to return to
+        Tip: Click <span className="font-semibold text-white">StreamCore</span> in the top bar anytime to return to
         this home page.
       </div>
     </AppPage>

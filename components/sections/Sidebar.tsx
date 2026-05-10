@@ -31,7 +31,7 @@ type Item = {
 const items: Item[] = [
   { href: "/dashboard", label: "Live Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
   { href: "/app/overlay-editor", label: "Overlay editor", icon: <Palette className="h-4 w-4" /> },
-  { href: "/app/streamvault-bot", label: "StreamVault bot", icon: <Bot className="h-4 w-4" /> },
+  { href: "/app/streamcore-bot", label: "StreamCore bot", icon: <Bot className="h-4 w-4" /> },
   { href: "/app/now-playing-animation", label: "Now playing animation", icon: <Wand2 className="h-4 w-4" /> },
   { href: "/app/song-requests", label: "Song requests", icon: <Music2 className="h-4 w-4" /> },
   { href: "/app/shoutout-clip-player", label: "Shoutout Clip player", icon: <Clapperboard className="h-4 w-4" /> },
@@ -56,7 +56,7 @@ export function Sidebar() {
               <Layers className="h-5 w-5 text-white" />
             </div>
             <div className="text-sm font-semibold text-white">
-              Stream<span className="text-white/70">Vault</span>
+              Stream<span className="text-white/70">Core</span>
             </div>
           </div>
 

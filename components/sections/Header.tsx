@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogIn, LogOut, Vault } from "lucide-react";
+import { LogIn, LogOut, Cpu } from "lucide-react";
 import { motion } from "@/components/motion/motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/lib/cn";
@@ -23,10 +23,10 @@ export function Header({ mode = "marketing" }: { mode?: "marketing" | "app" }) {
                 "bg-primary/20 ring-1 ring-primary/30 shadow-[0_0_0_1px_rgba(168,85,247,.20),0_18px_50px_rgba(168,85,247,.20)]"
               )}
             >
-              <Vault className="h-5 w-5 text-white" />
+              <Cpu className="h-5 w-5 text-white" />
             </span>
             <span className="text-base font-semibold tracking-wide text-white">
-              Stream<span className="text-white/70">Vault</span>
+              Stream<span className="text-white/70">Core</span>
             </span>
           </Link>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, LayoutDashboard, Music2 } from "lucide-react";
+import { Bot, LayoutDashboard, Music2, Sparkles } from "lucide-react";
 import { motion } from "@/components/motion/motion";
 import { Card } from "@/components/ui/card";
 
@@ -21,34 +21,38 @@ export function FragmentedVsCentralized() {
           variants={fadeUp}
           className="mx-auto max-w-2xl text-center"
         >
-          <div className="text-xs font-semibold tracking-wider text-primary/90">
-            Fragmented → Centralized
-          </div>
+          <div className="text-xs font-semibold tracking-wider text-primary/90">Problem → Solution</div>
           <h2 className="mt-3 text-balance text-2xl font-semibold tracking-tight text-white md:text-4xl">
-            Replace your “20 tabs open” workflow with one cockpit.
+            Kill the "Tab Fatigue."
           </h2>
           <p className="mt-4 text-pretty text-base text-white/70">
-            StreamVault turns chaos into a clean command center — modular, fast, and built to keep
-            you focused mid-stream.
+            Most streamers juggle 5+ sites just to run a show. We built StreamCore to be your
+            stream&apos;s OS. No more conflicting bot variables, no more broken song requests, and no
+            more technical bloat.
           </p>
         </motion.div>
 
-        <div className="mt-10 grid gap-4 md:grid-cols-3 md:gap-6">
+        <div className="mt-10 grid gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-4">
           <BentoCard
             icon={<LayoutDashboard className="h-5 w-5" />}
             title="Unified Dashboard"
-            copy="Manage donations, chat, and analytics in one modular view. Minimize OBS, maximize focus."
+            copy="Minimize OBS. Run your actions, view your chat, and monitor your stream from one HUD."
           />
           <BentoCard
             icon={<Bot className="h-5 w-5" />}
-            title="AI Command Architect"
-            copy="Build complex bot logic using natural language. No coding, just conversation."
+            title="Smart Automation"
+            copy="Auto-shoutouts for raids and AI-driven TTS that actually sounds good."
             highlight
           />
           <BentoCard
             icon={<Music2 className="h-5 w-5" />}
-            title="Smart Spotify Integration"
-            copy="Sync Spotify Premium. Let your chat queue songs with !sr while displaying stylish “Now Playing” widgets."
+            title="Spotify Integration"
+            copy="Real-time “Now Playing” overlays and song requests that sync directly to your queue."
+          />
+          <BentoCard
+            icon={<Sparkles className="h-5 w-5" />}
+            title="Little Spirits"
+            copy="Interactive stream avatars and on-screen “Green Screen” video triggers driven by chat."
           />
         </div>
       </div>

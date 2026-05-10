@@ -38,8 +38,10 @@ const DOCKS: { key: DockKey; name: string }[] = [
   { key: "streamInfo", name: "Stream Info" }
 ];
 
-const STORAGE_KEY = "sv_live_dashboard_layout_v1";
-const STORAGE_VISIBLE_KEY = "sv_live_dashboard_visible_v1";
+const STORAGE_KEY = "sv_streamcore_live_dashboard_layout_v1";
+const STORAGE_VISIBLE_KEY = "sv_streamcore_live_dashboard_visible_v1";
+const STORAGE_KEY_LEGACY = "sv_live_dashboard_layout_v1";
+const STORAGE_VISIBLE_KEY_LEGACY = "sv_live_dashboard_visible_v1";
 
 const defaultVisible: DockKey[] = ["streamPreview", "liveChat", "activityFeed", "quickActions"];
 const DEFAULT_DOCK_W = 6;
@@ -81,8 +83,11 @@ export function DashboardGrid({
 
   React.useEffect(() => {
     try {
-      const rawLayouts = window.localStorage.getItem(STORAGE_KEY);
-      const rawVisible = window.localStorage.getItem(STORAGE_VISIBLE_KEY);
+      const rawLayouts =
+        window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(STORAGE_KEY_LEGACY);
+      const rawVisible =
+        window.localStorage.getItem(STORAGE_VISIBLE_KEY) ??
+        window.localStorage.getItem(STORAGE_VISIBLE_KEY_LEGACY);
       if (rawLayouts) setLayouts(JSON.parse(rawLayouts) as Layouts);
       if (rawVisible) setVisible(JSON.parse(rawVisible) as DockKey[]);
     } catch {
@@ -175,7 +180,7 @@ export function DashboardGrid({
                     onClick={() => addDock(d.key)}
                     draggable
                     onDragStart={(e) => {
-                      e.dataTransfer.setData("application/x-streamvault-dock", d.key);
+                      e.dataTransfer.setData("application/x-streamcore-dock", d.key);
                       e.dataTransfer.effectAllowed = "copy";
                     }}
                     className={cn(
@@ -217,7 +222,7 @@ export function DashboardGrid({
           droppingItem={{ i: "__dropping__", w: DEFAULT_DOCK_W, h: DEFAULT_DOCK_H }}
           onDrop={(_layout, item, e) => {
             const raw = (e as DragEvent)?.dataTransfer?.getData(
-              "application/x-streamvault-dock"
+              "application/x-streamcore-dock"
             );
             const key = raw as DockKey;
             if (!raw) return;

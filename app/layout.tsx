@@ -8,9 +8,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "StreamVault",
+  title: "StreamCore",
   description:
-    "The ultimate cockpit for modern streamers. Centralize your chatbot, music, and overlays into one powerful dashboard."
+    "One tab. One core. Total command. Centralize your bots, overlays, and Spotify controls into one high-performance command center."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

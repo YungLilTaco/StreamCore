@@ -15,7 +15,7 @@
         "Eliminate tab-overload. Centralize your chatbot, music, and overlays into one powerful cloud-based dashboard.",
       bodyHtml: `
         <div class="sv-heroCard">
-          <div class="sv-heroKicker">STREAMVAULT</div>
+          <div class="sv-heroKicker">STREAMCORE</div>
           <div class="sv-heroTitle sv-shimmer">The Ultimate Cockpit for Modern Streamers.</div>
           <div class="sv-heroSub">Eliminate tab-overload. Centralize your chatbot, music, and overlays into one powerful cloud-based dashboard.</div>
           <div class="sv-heroCtas">
@@ -52,9 +52,9 @@
       heading: "Overlay editor",
       description: "Bewerk je overlays en scenes voor je stream.",
     },
-    "#streamvault-bot": {
-      title: "StreamVault bot",
-      heading: "StreamVault bot",
+    "#streamcore-bot": {
+      title: "StreamCore bot",
+      heading: "StreamCore bot",
       description: "Beheer bot-commands, triggers en moderatie.",
     },
     "#now-playing-animation": {

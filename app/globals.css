@@ -1,9 +1,9 @@
+@import "react-grid-layout/css/styles.css";
+@import "react-resizable/css/styles.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import "react-grid-layout/css/styles.css";
-@import "react-resizable/css/styles.css";
 
 :root {
   color-scheme: dark;

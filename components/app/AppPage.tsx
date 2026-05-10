@@ -20,7 +20,7 @@ export function AppPage({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: "easeOut" }}
         >
-          <div className="text-xs font-semibold tracking-wider text-primary/90">StreamVault</div>
+          <div className="text-xs font-semibold tracking-wider text-primary/90">StreamCore</div>
           <h1 className="mt-3 text-balance text-2xl font-semibold tracking-tight text-white md:text-4xl">
             {title}
           </h1>

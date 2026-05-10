@@ -1,8 +1,7 @@
 import { Header } from "@/components/sections/Header";
 import { Hero } from "@/components/sections/Hero";
 import { FragmentedVsCentralized } from "@/components/sections/FragmentedVsCentralized";
-import { SharedStreamLogic } from "@/components/sections/SharedStreamLogic";
-import { MasterOverlay } from "@/components/sections/MasterOverlay";
+import { FoundersNote } from "@/components/sections/FoundersNote";
 import { ClosingCTA } from "@/components/sections/ClosingCTA";
 import { Footer } from "@/components/sections/Footer";
 
@@ -16,8 +15,7 @@ export default function Page() {
         <main className="mx-auto w-full max-w-7xl px-4">
           <Hero />
           <FragmentedVsCentralized />
-          <SharedStreamLogic />
-          <MasterOverlay />
+          <FoundersNote />
           <ClosingCTA />
         </main>
 
