@@ -26,9 +26,16 @@ const spotifyScopes = [
   "user-read-playback-state"
 ].join(" ");
 
+const authSecret =
+  process.env.AUTH_SECRET?.trim() ||
+  process.env.NEXTAUTH_SECRET?.trim();
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  secret: process.env.AUTH_SECRET,
+  /** Verbose `[auth]` server logs — set AUTH_DEBUG=true on Vercel, reproduce sign-in once, read Function logs. */
+  debug: process.env.AUTH_DEBUG === "true",
+  /** Must be non-empty on Vercel prod or Auth.js returns `Configuration`. Empty env strings count as unset. */
+  secret: authSecret,
   /**
    * Required for OAuth behind reverse proxies / non-Vercel hosts. If unset, remote users can hit
    * UntrustedHost or bad redirect_uri when the inferred public URL doesn’t match your domain.
@@ -36,7 +43,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
    */
   trustHost: true,
   session: { strategy: "database" },
-  pages: { signIn: "/login" },
+  /** Show branded `/login` with details instead of the generic `/api/auth/error` page. */
+  pages: { signIn: "/login", error: "/login" },
   cookies: {
     sessionToken: {
       name:
