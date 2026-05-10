@@ -5,9 +5,32 @@ import { Cpu, LogIn } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { cn } from "@/components/lib/cn";
 
-export function LoginClient({ from }: { from: string }) {
+const authErrorMessages: Record<string, string> = {
+  Configuration:
+    "Server auth configuration is incomplete (check AUTH_SECRET and AUTH_URL in production).",
+  AccessDenied: "Twitch sign-in was cancelled or refused.",
+  Verification: "The sign-in link expired or was already used. Try again.",
+  OAuthSignin: "Could not start Twitch sign-in (configuration or Twitch app settings).",
+  OAuthCallback:
+    "Twitch redirected back but the callback failed. Usually the Redirect URL in the Twitch Developer Console does not exactly match your site, or AUTH_URL / NEXTAUTH_URL is wrong.",
+  OAuthCreateAccount: "Could not create your account after Twitch. Try again or contact support.",
+  Callback: "OAuth callback failed. Check your Twitch app Redirect URI and your site’s public URL (AUTH_URL).",
+  Default: "Sign-in failed. Try again, or ask the site owner to verify Twitch OAuth and server settings."
+};
+
+export function LoginClient({
+  from,
+  authError,
+  errorDescription
+}: {
+  from: string;
+  authError?: string;
+  errorDescription?: string;
+}) {
   const router = useRouter();
+  const errorLine = authError ? (authErrorMessages[authError] ?? authErrorMessages.Default) : null;
 
   return (
     <div className="min-h-screen bg-black">
@@ -30,6 +53,24 @@ export function LoginClient({ from }: { from: string }) {
               Sign in with Twitch to access your StreamCore dashboard. You can link Spotify after
               login from Settings.
             </div>
+
+            {errorLine ? (
+              <div
+                className={cn(
+                  "mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100/95"
+                )}
+                role="alert"
+              >
+                <div className="font-semibold text-rose-200">Twitch sign-in error</div>
+                <p className="mt-1 text-rose-100/90">{errorLine}</p>
+                {authError ? (
+                  <p className="mt-2 font-mono text-[11px] text-rose-200/70">Code: {authError}</p>
+                ) : null}
+                {errorDescription ? (
+                  <p className="mt-1 text-[12px] text-rose-100/80">{errorDescription}</p>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="mt-6 flex gap-3">
               <Button

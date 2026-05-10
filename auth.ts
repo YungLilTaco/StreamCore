@@ -29,6 +29,12 @@ const spotifyScopes = [
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   secret: process.env.AUTH_SECRET,
+  /**
+   * Required for OAuth behind reverse proxies / non-Vercel hosts. If unset, remote users can hit
+   * UntrustedHost or bad redirect_uri when the inferred public URL doesn’t match your domain.
+   * Set AUTH_URL (or NEXTAUTH_URL) to the exact HTTPS origin visitors use (no trailing slash).
+   */
+  trustHost: true,
   session: { strategy: "database" },
   pages: { signIn: "/login" },
   cookies: {
@@ -66,13 +72,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   events: {
     async linkAccount({ user, account }) {
       if (!user?.id) return;
-      await prisma.userConsent.create({
-        data: {
-          userId: user.id,
-          provider: account.provider,
-          scopes: account.scope ?? ""
-        }
-      });
+      try {
+        await prisma.userConsent.create({
+          data: {
+            userId: user.id,
+            provider: account.provider,
+            scopes: account.scope ?? ""
+          }
+        });
+      } catch (e) {
+        // Never fail the OAuth callback if consent logging breaks (DB hiccup, etc.)
+        console.error("[auth] userConsent logging failed:", e);
+      }
     }
   }
 });
