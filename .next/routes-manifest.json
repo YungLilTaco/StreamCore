@@ -18,7 +18,24 @@
     "afterFiles": [],
     "fallback": []
   },
-  "dynamicRoutes": [],
+  "dynamicRoutes": [
+    {
+      "page": "/api/auth/[...nextauth]",
+      "regex": "^/api/auth/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPnextauth": "nxtPnextauth"
+      },
+      "namedRegex": "^/api/auth/(?<nxtPnextauth>.+?)(?:/)?$"
+    },
+    {
+      "page": "/invite/[token]",
+      "regex": "^/invite/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPtoken": "nxtPtoken"
+      },
+      "namedRegex": "^/invite/(?<nxtPtoken>[^/]+?)(?:/)?$"
+    }
+  ],
   "staticRoutes": [
     {
       "page": "/",
@@ -75,10 +92,22 @@
       "namedRegex": "^/app/overlay\\-editor(?:/)?$"
     },
     {
+      "page": "/app/permissions",
+      "regex": "^/app/permissions(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/app/permissions(?:/)?$"
+    },
+    {
       "page": "/app/random-clip-player",
       "regex": "^/app/random\\-clip\\-player(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/app/random\\-clip\\-player(?:/)?$"
+    },
+    {
+      "page": "/app/settings",
+      "regex": "^/app/settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/app/settings(?:/)?$"
     },
     {
       "page": "/app/shoutout-clip-player",

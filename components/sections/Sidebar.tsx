@@ -17,10 +17,12 @@ import {
   Shuffle,
   Sparkles,
   Video,
-  Wand2
+  Wand2,
+  Settings
 } from "lucide-react";
 import { motion } from "@/components/motion/motion";
 import { cn } from "@/components/lib/cn";
+import { useTranslation } from "react-i18next";
 
 type Item = {
   href: string;
@@ -29,23 +31,25 @@ type Item = {
 };
 
 const items: Item[] = [
-  { href: "/dashboard", label: "Live Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
-  { href: "/app/overlay-editor", label: "Overlay editor", icon: <Palette className="h-4 w-4" /> },
-  { href: "/app/streamcore-bot", label: "StreamCore bot", icon: <Bot className="h-4 w-4" /> },
-  { href: "/app/now-playing-animation", label: "Now playing animation", icon: <Wand2 className="h-4 w-4" /> },
-  { href: "/app/song-requests", label: "Song requests", icon: <Music2 className="h-4 w-4" /> },
-  { href: "/app/shoutout-clip-player", label: "Shoutout Clip player", icon: <Clapperboard className="h-4 w-4" /> },
-  { href: "/app/random-clip-player", label: "Random Clip player", icon: <Shuffle className="h-4 w-4" /> },
-  { href: "/app/stream-spirits", label: "Stream Spirits", icon: <Sparkles className="h-4 w-4" /> },
-  { href: "/app/tts-bot", label: "TTS Bot", icon: <Mic className="h-4 w-4" /> },
-  { href: "/app/green-screen-videos", label: "Green screen videos", icon: <Video className="h-4 w-4" /> },
-  { href: "/app/sound-alerts", label: "Sound alerts", icon: <PlaySquare className="h-4 w-4" /> },
-  { href: "/app/marketplace", label: "Marketplace", icon: <Coins className="h-4 w-4" /> },
-  { href: "/app/analytics", label: "Analytics", icon: <BarChart3 className="h-4 w-4" /> }
+  { href: "/dashboard", label: "navLiveDashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+  { href: "/app/overlay-editor", label: "navOverlayEditor", icon: <Palette className="h-4 w-4" /> },
+  { href: "/app/streamcore-bot", label: "navBot", icon: <Bot className="h-4 w-4" /> },
+  { href: "/app/now-playing-animation", label: "navNowPlaying", icon: <Wand2 className="h-4 w-4" /> },
+  { href: "/app/song-requests", label: "navSongRequests", icon: <Music2 className="h-4 w-4" /> },
+  { href: "/app/shoutout-clip-player", label: "navShoutout", icon: <Clapperboard className="h-4 w-4" /> },
+  { href: "/app/random-clip-player", label: "navRandomClip", icon: <Shuffle className="h-4 w-4" /> },
+  { href: "/app/stream-spirits", label: "navSpirits", icon: <Sparkles className="h-4 w-4" /> },
+  { href: "/app/tts-bot", label: "navTts", icon: <Mic className="h-4 w-4" /> },
+  { href: "/app/green-screen-videos", label: "navGreenScreen", icon: <Video className="h-4 w-4" /> },
+  { href: "/app/sound-alerts", label: "navSoundAlerts", icon: <PlaySquare className="h-4 w-4" /> },
+  { href: "/app/marketplace", label: "navMarketplace", icon: <Coins className="h-4 w-4" /> },
+  { href: "/app/analytics", label: "navAnalytics", icon: <BarChart3 className="h-4 w-4" /> },
+  { href: "/app/settings", label: "navSettings", icon: <Settings className="h-4 w-4" /> }
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   return (
     <aside className="hidden md:block">
@@ -87,7 +91,7 @@ export function Sidebar() {
                       >
                         {item.icon}
                       </span>
-                      <span className="truncate">{item.label}</span>
+                      <span className="truncate">{t(item.label)}</span>
                       {isActive ? (
                         <span className="absolute left-0 top-2 h-[calc(100%-1rem)] w-1 rounded-full bg-gradient-to-b from-primary to-fuchsia-400" />
                       ) : null}

@@ -1,3 +1,5 @@
+// Legacy demo auth. Kept temporarily to avoid breaking imports while
+// real Auth.js protection is rolled out across layouts/routes.
 export const AUTH_STORAGE_KEY = "sv_authed";
 
 export function isAuthedClient(): boolean {

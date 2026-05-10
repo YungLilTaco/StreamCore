@@ -1,25 +1,11 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { isAuthedClient } from "@/components/auth/auth";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { Header } from "@/components/sections/Header";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (!isAuthedClient()) {
-      router.replace("/?from=" + encodeURIComponent(pathname || "/dashboard"));
-      return;
-    }
-    setReady(true);
-  }, [router, pathname]);
-
-  if (!ready) return null;
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login?from=%2Fdashboard");
 
   return (
     <div className="min-h-screen bg-[#0F0F0F]">
