@@ -7,10 +7,14 @@ import { Button } from "@/components/ui/button";
 
 export function QuickActionsDock({
   dragHandleProps,
-  onClose
+  onClose,
+  dockLocked,
+  onToggleDockLock
 }: {
   dragHandleProps?: any;
   onClose?: () => void;
+  dockLocked?: boolean;
+  onToggleDockLock?: () => void;
 }) {
   const [toast, setToast] = React.useState<string | null>(null);
 
@@ -31,8 +35,10 @@ export function QuickActionsDock({
       }
       dragHandleProps={dragHandleProps}
       onClose={onClose}
+      dockLocked={dockLocked}
+      onToggleDockLock={onToggleDockLock}
     >
-      <div className="flex h-full flex-col gap-3">
+      <div className="flex h-full min-h-0 flex-col gap-3">
         <div className="grid grid-cols-2 gap-3">
           <Button variant="secondary" onClick={() => notify("Shoutout sent")}>
             <Megaphone className="h-4 w-4" />

@@ -11,6 +11,7 @@ import { signOut, useSession } from "next-auth/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStreamCoreLocale, setStreamCoreLocale } from "@/components/i18n/I18nProvider";
 import { useTranslation } from "react-i18next";
+import { pushPathWithChannel, useMaybeSelectedChannel } from "@/components/app/SelectedChannelProvider";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +30,7 @@ export function Header({ mode = "marketing" }: { mode?: "marketing" | "app" }) {
   const router = useRouter();
   const { data: session } = useSession();
   const { t } = useTranslation();
+  const channelCtx = useMaybeSelectedChannel();
 
   const user = session?.user;
   const displayName = user?.name ?? "Account";
@@ -41,20 +43,13 @@ export function Header({ mode = "marketing" }: { mode?: "marketing" | "app" }) {
     .join("");
 
   const [locale, setLocale] = React.useState("en");
-  const [channels, setChannels] = React.useState<
-    { channelTwitchId: string; channelDisplayName: string; role: string; isSelf?: boolean }[]
-  >([]);
+  const channels = mode === "app" ? (channelCtx?.channels ?? []) : [];
+  const resolvedChannelLabel = channels.find((c) => channelCtx?.channelTwitchId === c.channelTwitchId)
+    ?.channelDisplayName;
 
   React.useEffect(() => {
     setLocale(getStreamCoreLocale());
-    if (mode !== "app") return;
-    fetch("/api/channel-permissions", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (json?.channels) setChannels(json.channels);
-      })
-      .catch(() => {});
-  }, [mode]);
+  }, []);
 
   return (
     <div className="sticky top-0 z-50">
@@ -121,8 +116,13 @@ export function Header({ mode = "marketing" }: { mode?: "marketing" | "app" }) {
                       <AvatarImage src={image} alt={displayName} />
                       <AvatarFallback>{initials || "SC"}</AvatarFallback>
                     </Avatar>
-                    <div className="max-w-[160px] truncate text-sm font-semibold text-white/85">
-                      {displayName}
+                    <div className="flex min-w-0 max-w-[200px] flex-col items-start">
+                      <div className="w-full truncate text-sm font-semibold text-white/85">{displayName}</div>
+                      {resolvedChannelLabel ? (
+                        <div className="w-full truncate text-[11px] text-white/45">
+                          Channel: <span className="text-white/65">{resolvedChannelLabel}</span>
+                        </div>
+                      ) : null}
                     </div>
                   </button>
                 </DropdownMenuTrigger>
@@ -130,7 +130,11 @@ export function Header({ mode = "marketing" }: { mode?: "marketing" | "app" }) {
                 <DropdownMenuContent align="end" className="w-[280px]">
                   <DropdownMenuLabel>{t("profile")}</DropdownMenuLabel>
                   <DropdownMenuItem
-                    onSelect={() => router.push("/app/analytics")}
+                    onSelect={() => {
+                      const self = channels.find((c) => c.isSelf);
+                      if (self) pushPathWithChannel("/app/analytics", self.channelTwitchId, router);
+                      else router.push("/app/analytics");
+                    }}
                     className="justify-between"
                   >
                     <span className="flex items-center gap-2">
@@ -146,7 +150,7 @@ export function Header({ mode = "marketing" }: { mode?: "marketing" | "app" }) {
                       {channels.map((c) => (
                         <DropdownMenuItem
                           key={c.channelTwitchId}
-                          onSelect={() => router.push(`/app/analytics?channel=${c.channelTwitchId}`)}
+                          onSelect={() => channelCtx?.selectChannel(c.channelTwitchId)}
                           className="justify-between"
                         >
                           <span className="truncate">{c.channelDisplayName}</span>

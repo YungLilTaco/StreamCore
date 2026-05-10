@@ -1,7 +1,0 @@
-{
-  "/api/channel-permissions/route": "app/api/channel-permissions/route.js",
-  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
-  "/app/permissions/page": "app/app/permissions/page.js",
-  "/app/dashboard/page": "app/app/dashboard/page.js",
-  "/app/overlay-editor/page": "app/app/overlay-editor/page.js"
-}

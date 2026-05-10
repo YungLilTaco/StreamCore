@@ -28,10 +28,14 @@ function VerticalFader({
 
 export function SoundMixerDock({
   dragHandleProps,
-  onClose
+  onClose,
+  dockLocked,
+  onToggleDockLock
 }: {
   dragHandleProps?: any;
   onClose?: () => void;
+  dockLocked?: boolean;
+  onToggleDockLock?: () => void;
 }) {
   const [master, setMaster] = React.useState(88);
   const [music, setMusic] = React.useState(45);
@@ -39,7 +43,13 @@ export function SoundMixerDock({
   const [fx, setFx] = React.useState(38);
 
   return (
-    <DockShell title="Sound Mixer" dragHandleProps={dragHandleProps} onClose={onClose}>
+    <DockShell
+      title="Sound Mixer"
+      dragHandleProps={dragHandleProps}
+      onClose={onClose}
+      dockLocked={dockLocked}
+      onToggleDockLock={onToggleDockLock}
+    >
       <div className="grid h-full grid-cols-2 gap-3 md:grid-cols-4">
         <VerticalFader label="MASTER" value={master} onChange={setMaster} />
         <VerticalFader label="MUSIC" value={music} onChange={setMusic} />

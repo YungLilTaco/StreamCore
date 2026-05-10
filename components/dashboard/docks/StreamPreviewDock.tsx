@@ -5,10 +5,14 @@ import { DockShell } from "@/components/dashboard/docks/DockShell";
 
 export function StreamPreviewDock({
   dragHandleProps,
-  onClose
+  onClose,
+  dockLocked,
+  onToggleDockLock
 }: {
   dragHandleProps?: any;
   onClose?: () => void;
+  dockLocked?: boolean;
+  onToggleDockLock?: () => void;
 }) {
   return (
     <DockShell
@@ -24,9 +28,11 @@ export function StreamPreviewDock({
       }
       dragHandleProps={dragHandleProps}
       onClose={onClose}
+      dockLocked={dockLocked}
+      onToggleDockLock={onToggleDockLock}
     >
-      <div className="flex h-full flex-col gap-3">
-        <div className="relative flex-1 overflow-hidden rounded-lg border border-white/10 bg-black/50">
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        <div className="relative min-h-[148px] flex-1 overflow-hidden rounded-lg border border-white/10 bg-black/50">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-sky-400/10" />
           <div className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-xs text-white/70 backdrop-blur">
             <Signal className="h-3.5 w-3.5 text-primary" />

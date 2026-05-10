@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { AppProviders } from "@/components/app/AppProviders";
+import { AppShellLayout } from "@/components/app/AppShellLayout";
 import { Header } from "@/components/sections/Header";
-import { Sidebar } from "@/components/sections/Sidebar";
 import { Footer } from "@/components/sections/Footer";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -11,19 +13,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session?.user?.id) redirect("/login?from=%2Fapp");
 
   return (
-    <div className="min-h-screen bg-black">
-      <div className="relative sv-bg">
-        <div className="pointer-events-none absolute inset-0 sv-grid opacity-[0.18]" />
-        <Header mode="app" />
+    <Suspense fallback={null}>
+      <AppProviders>
+        <div className="min-h-screen bg-black">
+          <div className="relative sv-bg">
+            <div className="pointer-events-none absolute inset-0 sv-grid opacity-[0.18]" />
+            <Header mode="app" />
 
-        <div className="mx-auto flex w-full max-w-[1480px] gap-0 px-4">
-          <Sidebar />
-          <div className="min-w-0 flex-1">{children}</div>
+            <AppShellLayout>{children}</AppShellLayout>
+
+            <Footer />
+          </div>
         </div>
-
-        <Footer />
-      </div>
-    </div>
+      </AppProviders>
+    </Suspense>
   );
 }
 

@@ -12,6 +12,10 @@ const twitchScopes = [
   "user:read:email",
   "chat:read",
   "chat:edit",
+  "channel:manage:broadcast",
+  "moderator:read:followers",
+  "channel:read:subscriptions",
+  "bits:read",
   "channel:read:redemptions",
   "moderator:manage:shoutouts"
 ];

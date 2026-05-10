@@ -7,10 +7,14 @@ import { Button } from "@/components/ui/button";
 
 export function QuickClipDock({
   dragHandleProps,
-  onClose
+  onClose,
+  dockLocked,
+  onToggleDockLock
 }: {
   dragHandleProps?: any;
   onClose?: () => void;
+  dockLocked?: boolean;
+  onToggleDockLock?: () => void;
 }) {
   const [ok, setOk] = React.useState(false);
 
@@ -27,8 +31,10 @@ export function QuickClipDock({
       }
       dragHandleProps={dragHandleProps}
       onClose={onClose}
+      dockLocked={dockLocked}
+      onToggleDockLock={onToggleDockLock}
     >
-      <div className="flex h-full flex-col items-center justify-center gap-3">
+      <div className="flex h-full min-h-0 flex-col items-center justify-center gap-3">
         <Button
           variant="primary"
           className="h-14 w-full max-w-sm text-base shadow-glow-purple"

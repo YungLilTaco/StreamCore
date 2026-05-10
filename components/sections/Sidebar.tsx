@@ -13,6 +13,8 @@ import {
   Mic,
   Music2,
   Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   PlaySquare,
   Shuffle,
   Sparkles,
@@ -23,6 +25,7 @@ import {
 import { motion } from "@/components/motion/motion";
 import { cn } from "@/components/lib/cn";
 import { useTranslation } from "react-i18next";
+import { useAppSidebar } from "@/components/app/AppSidebarContext";
 
 type Item = {
   href: string;
@@ -50,18 +53,52 @@ const items: Item[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const { t } = useTranslation();
+  const { sidebarCollapsed, setSidebarCollapsed } = useAppSidebar();
+
+  if (sidebarCollapsed) {
+    return (
+      <aside className="relative hidden w-0 shrink-0 overflow-visible md:block">
+        <button
+          type="button"
+          onClick={() => setSidebarCollapsed(false)}
+          className={cn(
+            "absolute left-0 top-24 z-30 flex h-11 w-9 items-center justify-center rounded-r-lg",
+            "border border-l-0 border-white/10 bg-black/50 text-white/85 shadow-lg backdrop-blur",
+            "hover:bg-black/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+          )}
+          aria-label={t("navShowMenu", { defaultValue: "Show menu" })}
+        >
+          <PanelLeftOpen className="h-5 w-5" />
+        </button>
+      </aside>
+    );
+  }
 
   return (
-    <aside className="hidden md:block">
+    <aside className="hidden shrink-0 md:block">
       <div className="sticky top-16 h-[calc(100vh-4rem)] w-[320px] border-r border-white/10 bg-black/20 backdrop-blur">
         <div className="flex h-full flex-col gap-4 px-4 py-6">
-          <div className="flex items-center gap-2 px-2">
-            <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 ring-1 ring-primary/25">
-              <Layers className="h-5 w-5 text-white" />
+          <div className="flex items-center justify-between gap-2 px-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 ring-1 ring-primary/25">
+                <Layers className="h-5 w-5 text-white" />
+              </div>
+              <div className="truncate text-sm font-semibold text-white">
+                Stream<span className="text-white/70">Core</span>
+              </div>
             </div>
-            <div className="text-sm font-semibold text-white">
-              Stream<span className="text-white/70">Core</span>
-            </div>
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed(true)}
+              className={cn(
+                "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10",
+                "bg-white/[0.04] text-white/80 hover:bg-white/[0.08] hover:text-white",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+              )}
+              aria-label={t("navHideMenu", { defaultValue: "Hide menu" })}
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
           </div>
 
           <nav className="flex-1 overflow-auto pr-1 [scrollbar-gutter:stable]">

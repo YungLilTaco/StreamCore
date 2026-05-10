@@ -16,10 +16,14 @@ const seed: Msg[] = [
 
 export function LiveChatDock({
   dragHandleProps,
-  onClose
+  onClose,
+  dockLocked,
+  onToggleDockLock
 }: {
   dragHandleProps?: any;
   onClose?: () => void;
+  dockLocked?: boolean;
+  onToggleDockLock?: () => void;
 }) {
   const [messages, setMessages] = React.useState<Msg[]>(seed);
   const [text, setText] = React.useState("");
@@ -42,8 +46,14 @@ export function LiveChatDock({
   }
 
   return (
-    <DockShell title="Live Stream Chat" dragHandleProps={dragHandleProps} onClose={onClose}>
-      <div className="flex h-full flex-col gap-3">
+    <DockShell
+      title="Live Stream Chat"
+      dragHandleProps={dragHandleProps}
+      onClose={onClose}
+      dockLocked={dockLocked}
+      onToggleDockLock={onToggleDockLock}
+    >
+      <div className="flex h-full min-h-0 flex-col gap-3">
         <div
           ref={scrollerRef}
           className="flex-1 overflow-auto rounded-lg border border-white/10 bg-black/30 p-3"

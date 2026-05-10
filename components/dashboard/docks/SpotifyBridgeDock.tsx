@@ -5,14 +5,24 @@ import { DockShell } from "@/components/dashboard/docks/DockShell";
 
 export function SpotifyBridgeDock({
   dragHandleProps,
-  onClose
+  onClose,
+  dockLocked,
+  onToggleDockLock
 }: {
   dragHandleProps?: any;
   onClose?: () => void;
+  dockLocked?: boolean;
+  onToggleDockLock?: () => void;
 }) {
   return (
-    <DockShell title="Spotify Bridge" dragHandleProps={dragHandleProps} onClose={onClose}>
-      <div className="flex h-full flex-col gap-4">
+    <DockShell
+      title="Spotify Bridge"
+      dragHandleProps={dragHandleProps}
+      onClose={onClose}
+      dockLocked={dockLocked}
+      onToggleDockLock={onToggleDockLock}
+    >
+      <div className="flex h-full min-h-0 flex-col gap-4">
         <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/30 p-3">
           <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-white/10 bg-gradient-to-br from-primary/20 via-black/40 to-sky-400/10" />
           <div className="min-w-0">

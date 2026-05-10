@@ -10,6 +10,12 @@ const twitchScopes = [
   "user:read:email",
   "chat:read",
   "chat:edit",
+  // Live dashboard: stream info (title/category/tags)
+  "channel:manage:broadcast",
+  // Live dashboard: realtime activity feed
+  "moderator:read:followers",
+  "channel:read:subscriptions",
+  "bits:read",
   "channel:read:redemptions",
   "moderator:manage:shoutouts"
 ].join(" ");

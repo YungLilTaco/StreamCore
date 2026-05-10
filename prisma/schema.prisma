@@ -3,8 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // App / Prisma Client (e.g. transaction pooler :6543 + pgbouncer=true)
+  url       = env("DATABASE_URL")
+  // Prisma Migrate only — avoids hangs on transaction pooler; use session pooler or direct DB URI
+  directUrl = env("DIRECT_URL")
 }
 
 // Auth.js / NextAuth.js recommended Prisma schema
@@ -21,9 +24,27 @@ model User {
   consents      UserConsent[]
   channelPerms  ChannelPermission[]
   invitesCreated PermissionInvite[] @relation("PermissionInviteCreatedBy")
+  dashboardLayouts DashboardLayout[]
 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+}
+
+model DashboardLayout {
+  id              String   @id @default(cuid())
+  userId          String
+  channelTwitchId String
+  layoutsJson     String
+  visibleJson     String
+  /** JSON: Partial<Record<dockKey, boolean>> — true = dock locked (not draggable/resizable) */
+  docksLockedJson String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channelTwitchId])
+  @@index([channelTwitchId])
 }
 
 model Account {
