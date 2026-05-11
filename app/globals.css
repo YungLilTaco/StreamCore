@@ -31,7 +31,9 @@ body {
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  background-size: 48px 48px;
+  /* 12px cells: 1/4 of the previous 48px tile so the visible snap grid matches the finer v2
+     dock resolution (32 cols × 15px rowHeight). */
+  background-size: 12px 12px;
   mask-image: radial-gradient(65% 55% at 50% 25%, rgba(0, 0, 0, 1) 40%, transparent 85%);
 }
 
@@ -71,44 +73,201 @@ body {
   }
 }
 
-/* react-grid-layout dark theme tweaks */
+/*
+ * react-grid-layout resize handles — invisible, full-edge hit areas.
+ *
+ * The library normally renders a tiny 20×20 corner triangle with a background-image arrow. That
+ * UX is fiddly: users have to land their cursor on the exact corner pixel. We override every
+ * handle to:
+ *   1. Hide the visual indicator (`background: none`, `::after` content stripped).
+ *   2. Stretch side handles along the entire edge of the tile so resizing works no matter where
+ *      the user grabs.
+ *   3. Keep corner handles as small overlay squares that take precedence at the corners (their
+ *      `z-index` sits above the sides) and carry the diagonal `nwse-resize` / `nesw-resize`
+ *      cursors so they read as "drag in both axes".
+ *
+ * The side handle thickness (6px) is a compromise — enough surface area for an easy grab on a
+ * trackpad without obscuring meaningful tile content beneath. Sides skip the corner pixels via
+ * `inset: 10px` so the corner handles always win the hit-test where they overlap.
+ */
 .react-grid-item > .react-resizable-handle {
-  filter: brightness(1.1);
-  opacity: 0.75;
+  background: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  transform: none !important;
+  opacity: 1;
+  z-index: 1;
+  /* Handles themselves must never start a text selection on mousedown. */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
 .react-grid-item > .react-resizable-handle::after {
-  border-color: rgba(255, 255, 255, 0.35);
+  display: none !important;
+  content: none !important;
+}
+
+/* Full-edge side handles. */
+.react-grid-item > .react-resizable-handle-s,
+.react-grid-item > .react-resizable-handle-n {
+  left: 10px !important;
+  right: 10px !important;
+  width: auto !important;
+  height: 6px !important;
 }
 .react-grid-item > .react-resizable-handle-s {
-  bottom: 0;
+  bottom: 0 !important;
+  top: auto !important;
+  cursor: ns-resize;
 }
+.react-grid-item > .react-resizable-handle-n {
+  top: 0 !important;
+  bottom: auto !important;
+  cursor: ns-resize;
+}
+.react-grid-item > .react-resizable-handle-w,
 .react-grid-item > .react-resizable-handle-e {
-  right: 0;
+  top: 10px !important;
+  bottom: 10px !important;
+  width: 6px !important;
+  height: auto !important;
 }
 .react-grid-item > .react-resizable-handle-w {
-  left: 0;
+  left: 0 !important;
+  right: auto !important;
+  cursor: ew-resize;
 }
+.react-grid-item > .react-resizable-handle-e {
+  right: 0 !important;
+  left: auto !important;
+  cursor: ew-resize;
+}
+
+/* Corner handles: small squares layered on top of the sides for diagonal resize. */
+.react-grid-item > .react-resizable-handle-se,
+.react-grid-item > .react-resizable-handle-sw,
+.react-grid-item > .react-resizable-handle-ne,
+.react-grid-item > .react-resizable-handle-nw {
+  width: 14px !important;
+  height: 14px !important;
+  z-index: 2;
+}
+.react-grid-item > .react-resizable-handle-se {
+  bottom: 0 !important;
+  right: 0 !important;
+  top: auto !important;
+  left: auto !important;
+  cursor: nwse-resize;
+}
+.react-grid-item > .react-resizable-handle-sw {
+  bottom: 0 !important;
+  left: 0 !important;
+  top: auto !important;
+  right: auto !important;
+  cursor: nesw-resize;
+}
+.react-grid-item > .react-resizable-handle-ne {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: auto !important;
+  left: auto !important;
+  cursor: nesw-resize;
+}
+.react-grid-item > .react-resizable-handle-nw {
+  top: 0 !important;
+  left: 0 !important;
+  bottom: auto !important;
+  right: auto !important;
+  cursor: nwse-resize;
+}
+
 .react-grid-item.react-draggable-dragging {
   z-index: 50;
 }
 
 /*
- * Drop / resize preview: RGL’s default uses opacity:0.2 on the whole tile (nearly invisible).
- * Solid opacity + rgba fill shows the real w×h slot where the dock will land (grid-sized by RGL).
+ * Suppress text selection page-wide while any dock is being dragged or resized.
+ *
+ * react-grid-layout adds `.resizing` to a tile during a resize gesture and
+ * `.react-draggable-dragging` during a move gesture. Without this, the browser happily highlights
+ * chat lines / activity feed text under the cursor as the user pulls a dock edge across the
+ * viewport, which looks like flickering selection.
+ *
+ * Scoped to `body:has(...)` so selection works normally the rest of the time. `:has()` ships in
+ * every evergreen browser (Chromium 105+, Firefox 121+, Safari 15.4+).
+ */
+body:has(.react-grid-item.resizing),
+body:has(.react-grid-item.react-draggable-dragging) {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: inherit;
+}
+
+/* Also lock the moving tile itself, in case `:has()` is unavailable somewhere. */
+.react-grid-item.resizing,
+.react-grid-item.react-draggable-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/*
+ * Drop / resize placeholder: shows where the user's active dock will end up. Tuned to be just
+ * present enough to read at a glance — soft purple fill, thin dashed border so it never
+ * competes visually with the shrinking-neighbour ring that uses a solid edge.
  */
 .react-grid-item.react-grid-placeholder {
   opacity: 1 !important;
-  background: rgba(168, 85, 247, 0.22) !important;
-  border: 2px solid rgba(168, 85, 247, 0.55) !important;
+  background: rgba(168, 85, 247, 0.10) !important;
+  border: 1px dashed rgba(168, 85, 247, 0.45) !important;
   border-radius: 12px;
   box-shadow:
-    inset 0 0 0 1px rgba(168, 85, 247, 0.35),
-    0 0 28px rgba(168, 85, 247, 0.18);
+    inset 0 0 0 1px rgba(168, 85, 247, 0.10),
+    0 0 18px rgba(168, 85, 247, 0.08);
   z-index: 2;
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .react-grid-item.react-grid-placeholder.placeholder-resizing {
-  background: rgba(168, 85, 247, 0.18) !important;
-  border-color: rgba(192, 132, 252, 0.55) !important;
+  background: rgba(168, 85, 247, 0.08) !important;
+  border-color: rgba(192, 132, 252, 0.40) !important;
+}
+
+/*
+ * Live shrink/shift preview ring.
+ *
+ * `DashboardGrid` toggles `.sv-dock-shrinking` on the wrapper div of every dock the resolver is
+ * currently shrinking or shifting during the drag. We then show the dock at its projected
+ * (post-drop) size — RGL renders it that way for free because we update the layout live — and
+ * make the dock body translucent so the user reads the outline as the future shape rather than
+ * the current contents.
+ *
+ * Layering trick: the outline lives on a `::before` pseudo-element on the wrapper, so it stays
+ * fully opaque even when we set `opacity` on the dock card inside.
+ */
+.sv-dock-wrap {
+  /* RGL sets inline width/height on this element — we never override sizing here. The class
+     exists for transitions and as the toggle target for the ring. */
+  transition: box-shadow 140ms ease;
+}
+
+/* The opaque, soft-purple outline showing the projected size. Doesn't fade with the card. */
+.sv-dock-shrinking::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(168, 85, 247, 0.65);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 0 0 1px rgba(168, 85, 247, 0.22),
+    0 0 22px rgba(168, 85, 247, 0.20);
+  pointer-events: none;
+  z-index: 10;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+/* Fade the actual dock content so the outline reads as "this is where it's going". */
+.sv-dock-shrinking > * {
+  opacity: 0.35;
+  transition: opacity 140ms ease;
 }
 

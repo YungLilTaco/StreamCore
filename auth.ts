@@ -17,7 +17,15 @@ const twitchScopes = [
   "channel:read:subscriptions",
   "bits:read",
   "channel:read:redemptions",
-  "moderator:manage:shoutouts"
+  "moderator:manage:shoutouts",
+  "channel:read:polls",
+  "channel:read:predictions",
+  // EventSub: hype train + creator goals
+  "channel:read:hype_train",
+  "channel:read:goals",
+  // User profile popover moderation: ban/timeout/unban + warnings + ban-status read
+  "moderator:manage:banned_users",
+  "moderator:manage:warnings"
 ].join(" ");
 
 const spotifyScopes = [
@@ -70,6 +78,53 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     })
   ],
   callbacks: {
+    /**
+     * PrismaAdapter only writes tokens to `Account` on the FIRST link. On every re-auth (e.g. user
+     * disconnects on twitch.tv then signs in again, or you add new scopes) Twitch issues new tokens
+     * and revokes the old ones — but the adapter ignores them and our DB row keeps the revoked
+     * `access_token` / `refresh_token`. Mirror the fresh OAuth tokens onto the existing row here.
+     */
+    async signIn({ user, account }) {
+      if (!account || !user?.id) return true;
+      if (account.provider !== "twitch" && account.provider !== "spotify") return true;
+      if (!account.providerAccountId || !account.access_token) return true;
+
+      try {
+        const updated = await prisma.account.updateMany({
+          where: {
+            userId: user.id,
+            provider: account.provider,
+            providerAccountId: account.providerAccountId
+          },
+          data: {
+            access_token: account.access_token,
+            refresh_token: account.refresh_token ?? undefined,
+            expires_at: account.expires_at ?? undefined,
+            scope: account.scope ?? undefined,
+            token_type: account.token_type ?? undefined,
+            id_token: account.id_token ?? undefined,
+            session_state:
+              typeof account.session_state === "string" ? account.session_state : undefined
+          }
+        });
+        if (updated.count > 0) {
+          try {
+            await prisma.userConsent.create({
+              data: {
+                userId: user.id,
+                provider: account.provider,
+                scopes: account.scope ?? ""
+              }
+            });
+          } catch {
+            /* consent log is best-effort */
+          }
+        }
+      } catch (e) {
+        console.error("[auth] signIn token mirror failed:", e);
+      }
+      return true;
+    },
     async session({ session, user }) {
       if (session.user) session.user.id = user.id;
       return session;

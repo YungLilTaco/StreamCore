@@ -129,6 +129,52 @@ model ChannelPermission {
   @@index([channelTwitchId])
 }
 
+/**
+ * Persistent archive of every Twitch IRC chat message we observe via the dashboard's WebSocket
+ * client. Twitch does not expose a "messages by user" API, so the only way to render history in
+ * the user-profile popover across sessions / devices / hot reloads is to write each PRIVMSG into
+ * our own DB as it arrives.
+ *
+ * Access policy:
+ *   - Writes: any user who has access to the channel (self or `ChannelPermission`) — the rows
+ *     are owned by the channel, not the writer, so multiple moderators converge on a single log.
+ *   - Reads: same — the user-profile popover queries by `userTwitchId` or `userLogin`.
+ *   - There is no per-user PII expectation here that isn't already public in the broadcaster's
+ *     own Twitch chat moderation tools.
+ *
+ * Soft delete (`deletedAt`) is used for CLEARMSG / CLEARCHAT so moderators can still audit what
+ * was removed; the query API can be told whether to include or hide soft-deleted rows.
+ */
+model ChatMessageArchive {
+  id              String    @id @default(cuid())
+  /** The broadcaster whose chat this message was observed in. */
+  channelTwitchId String
+  /** Twitch IRC `id` tag — globally unique per delivered PRIVMSG; basis of dedupe on ingest. */
+  ircId           String
+  /** Twitch numeric user-id (`user-id` tag). Optional only for legacy rows. */
+  userTwitchId    String?
+  /** Lowercase IRC nick. Always indexed for popover lookups. */
+  userLogin       String
+  displayName     String
+  color           String?
+  text            String
+  /** Raw `badges` IRC tag (`subscriber/24,moderator/1,...`). */
+  badges          String?
+  /** Twitch `tmi-sent-ts` (epoch ms). Stored as BigInt to outlive `Number.MAX_SAFE_INTEGER`. */
+  ts              BigInt
+  isMod           Boolean   @default(false)
+  isSubscriber    Boolean   @default(false)
+  /** Populated when CLEARMSG / CLEARCHAT removed this row from live chat. */
+  deletedAt       DateTime?
+
+  createdAt       DateTime  @default(now())
+
+  @@unique([channelTwitchId, ircId])
+  @@index([channelTwitchId, userTwitchId, ts])
+  @@index([channelTwitchId, userLogin, ts])
+  @@index([channelTwitchId, ts])
+}
+
 model PermissionInvite {
   id                 String          @id @default(cuid())
   token              String          @unique

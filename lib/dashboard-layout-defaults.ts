@@ -11,21 +11,37 @@ export type DashboardDockKey =
   | "streamInfo";
 
 /**
+ * Grid resolution version.
+ *
+ * v1 = 16 cols,  rowHeight 30, margin 14   (initial layout)
+ * v2 = 32 cols,  rowHeight 15, margin 8    (2× horizontal density)
+ * v3 = 128 cols, rowHeight 15, margin [4, 8] (4× horizontal density — snap matches the visible
+ *      12px page-background grid on typical desktop widths; vertical step unchanged so existing
+ *      heights migrate 1:1.)
+ *
+ * `DashboardGrid` reads layouts saved by older clients as v1/v2 and rescales them via
+ * `migrateLayoutsV1ToV2` / `migrateLayoutsV2ToV3` before handing them to `ResponsiveGridLayout`.
+ * New writes are persisted with the `{ __v: 3, layouts }` envelope (see `serializeLayouts`).
+ */
+export const DASHBOARD_LAYOUT_VERSION = 3 as const;
+
+/**
  * Grid row heights use DashboardGrid `rowHeight` + vertical `margin` (see app).
- * These min/default `h` values are tuned so each dock’s typical UI fits without clipping.
+ * These min/default `h` and `minW` values are tuned for the v3 grid (128 cols × 15px rowHeight)
+ * so each dock's typical UI fits without clipping.
  */
 export const DOCK_GRID_METRICS: Record<
   DashboardDockKey,
   { minH: number; h: number; minW: number }
 > = {
-  streamPreview: { minH: 7, h: 7, minW: 4 },
-  liveChat: { minH: 6, h: 6, minW: 4 },
-  activityFeed: { minH: 6, h: 6, minW: 3 },
-  quickActions: { minH: 6, h: 6, minW: 4 },
-  quickClip: { minH: 4, h: 4, minW: 3 },
-  spotifyBridge: { minH: 7, h: 7, minW: 4 },
-  soundMixer: { minH: 8, h: 8, minW: 4 },
-  streamInfo: { minH: 11, h: 11, minW: 4 }
+  streamPreview: { minH: 14, h: 14, minW: 32 },
+  liveChat: { minH: 12, h: 12, minW: 32 },
+  activityFeed: { minH: 12, h: 12, minW: 24 },
+  quickActions: { minH: 12, h: 12, minW: 32 },
+  quickClip: { minH: 8, h: 8, minW: 24 },
+  spotifyBridge: { minH: 14, h: 14, minW: 32 },
+  soundMixer: { minH: 16, h: 16, minW: 32 },
+  streamInfo: { minH: 22, h: 22, minW: 32 }
 };
 
 export const DASHBOARD_DEFAULT_VISIBLE: DashboardDockKey[] = [
@@ -102,25 +118,132 @@ export function normalizeDashboardLayouts(layouts: Layouts): Layouts {
   return out;
 }
 
-export function defaultDashboardLayouts(): Layouts {
-  const lg: Layout[] = [
-    { i: "streamPreview", x: 0, y: 0, w: 6, ...m("streamPreview") },
-    { i: "liveChat", x: 6, y: 0, w: 6, ...m("liveChat") },
-    { i: "activityFeed", x: 12, y: 0, w: 4, ...m("activityFeed") },
-    { i: "quickActions", x: 0, y: 7, w: 8, ...m("quickActions") }
-  ];
-  const md: Layout[] = [
-    { i: "streamPreview", x: 0, y: 0, w: 6, ...m("streamPreview") },
-    { i: "liveChat", x: 6, y: 0, w: 6, ...m("liveChat") },
-    { i: "activityFeed", x: 0, y: 7, w: 6, ...m("activityFeed") },
-    { i: "quickActions", x: 6, y: 7, w: 6, ...m("quickActions") }
-  ];
-  const sm: Layout[] = [
-    { i: "streamPreview", x: 0, y: 0, w: 6, ...m("streamPreview") },
-    { i: "liveChat", x: 0, y: 7, w: 6, ...m("liveChat") },
-    { i: "activityFeed", x: 0, y: 13, w: 6, ...m("activityFeed") },
-    { i: "quickActions", x: 0, y: 19, w: 6, ...m("quickActions") }
-  ];
+/**
+ * Copies one canonical layout to every breakpoint so ResponsiveGridLayout never swaps to a
+ * different x/y when the container width changes (e.g. sidebar toggle). Use with `cols` 32 at
+ * all breakpoints.
+ */
+export function replicateLayoutToAllBreakpoints(layout: Layout[]): Layouts {
+  const cleaned = layout.map(normalizeDashboardLayoutItem) as Layout[];
+  const out = {} as Layouts;
+  for (const bp of LAYOUT_BP_KEYS) {
+    out[bp] = cleaned.map((item) => ({ ...item }));
+  }
+  return out;
+}
 
-  return { lg, md, sm, xs: sm, xxs: sm };
+export function defaultDashboardLayouts(): Layouts {
+  // v3 grid is 128 cols wide — defaults below take the full width by spanning 48/48/32 across.
+  const lg: Layout[] = [
+    { i: "streamPreview", x: 0, y: 0, w: 48, ...m("streamPreview") },
+    { i: "liveChat", x: 48, y: 0, w: 48, ...m("liveChat") },
+    { i: "activityFeed", x: 96, y: 0, w: 32, ...m("activityFeed") },
+    { i: "quickActions", x: 0, y: 14, w: 64, ...m("quickActions") }
+  ];
+  return replicateLayoutToAllBreakpoints(lg);
+}
+
+/**
+ * Per-axis scaler used to migrate older grid versions. Vertical scaling is independent because
+ * v3 deliberately keeps rowHeight unchanged from v2 to avoid shrinking dock heights.
+ */
+function scaleLayoutItem(item: Layout, xScale: number, yScale: number): Layout {
+  const next: Layout = {
+    ...item,
+    x: Math.round((item.x ?? 0) * xScale),
+    y: Math.round((item.y ?? 0) * yScale),
+    w: Math.max(1, Math.round((item.w ?? 1) * xScale)),
+    h: Math.max(1, Math.round((item.h ?? 1) * yScale))
+  };
+  if (item.minW != null) next.minW = Math.round(item.minW * xScale);
+  if (item.minH != null) next.minH = Math.round(item.minH * yScale);
+  if (item.maxW != null) next.maxW = Math.round(item.maxW * xScale);
+  if (item.maxH != null) next.maxH = Math.round(item.maxH * yScale);
+  return next;
+}
+
+function scaleLayouts(layouts: Layouts, xScale: number, yScale: number): Layouts {
+  const out = {} as Layouts;
+  for (const bp of LAYOUT_BP_KEYS) {
+    out[bp] = ((layouts[bp] ?? []) as Layout[]).map((it) => scaleLayoutItem(it, xScale, yScale));
+  }
+  return out;
+}
+
+/**
+ * v1 → v2: 16 → 32 cols (×2 horizontal), 30 → 15px rowHeight (×2 vertical).
+ * Visual size is preserved because both step sizes halve and both grid counts double.
+ */
+export function migrateLayoutsV1ToV2(layouts: Layouts): Layouts {
+  return scaleLayouts(layouts, 2, 2);
+}
+
+/**
+ * v2 → v3: 32 → 128 cols (×4 horizontal), rowHeight unchanged (×1 vertical).
+ * Horizontal positions / widths quadruple; vertical stays the same.
+ */
+export function migrateLayoutsV2ToV3(layouts: Layouts): Layouts {
+  return scaleLayouts(layouts, 4, 1);
+}
+
+/** Serialised envelope persisted to localStorage + the dashboard layout DB row. */
+type StoredLayoutsEnvelope = { __v: number; layouts: Layouts };
+
+function isStoredEnvelope(raw: unknown): raw is StoredLayoutsEnvelope {
+  return (
+    !!raw &&
+    typeof raw === "object" &&
+    typeof (raw as { __v?: unknown }).__v === "number" &&
+    typeof (raw as { layouts?: unknown }).layouts === "object"
+  );
+}
+
+/**
+ * Apply every pending migration to land at the current version.
+ *
+ * Each step is independent (`vN → vN+1`) so adding a v3 → v4 migration in the future is a
+ * single new function + one extra `if` branch here, with no risk of double-applying old steps.
+ */
+function migrateLayoutsToLatest(layouts: Layouts, fromVersion: number): Layouts {
+  let current = layouts;
+  let version = fromVersion;
+  if (version < 2) {
+    current = migrateLayoutsV1ToV2(current);
+    version = 2;
+  }
+  if (version < 3) {
+    current = migrateLayoutsV2ToV3(current);
+    version = 3;
+  }
+  return current;
+}
+
+/**
+ * Parse a persisted layouts blob. Handles three shapes:
+ *
+ *   1. Empty / non-JSON → `null` (caller falls back to defaults).
+ *   2. Raw `Layouts` (no envelope) → treated as v1, migrated through every step to latest.
+ *   3. Versioned envelope `{ __v, layouts }` → migrated from the stored version to latest.
+ *
+ * The migration is one-way: once we save back with `serializeLayouts`, the blob is replaced with
+ * a `{ __v: <current>, layouts }` envelope so subsequent loads short-circuit at step 3.
+ */
+export function parseStoredLayouts(raw: string | null | undefined): Layouts | null {
+  if (!raw?.trim()) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (isStoredEnvelope(parsed)) {
+    if (parsed.__v >= DASHBOARD_LAYOUT_VERSION) return parsed.layouts;
+    return migrateLayoutsToLatest(parsed.layouts, parsed.__v);
+  }
+  // Legacy unversioned blob = raw v1 Layouts.
+  return migrateLayoutsToLatest(parsed as Layouts, 1);
+}
+
+export function serializeLayouts(layouts: Layouts): string {
+  return JSON.stringify({ __v: DASHBOARD_LAYOUT_VERSION, layouts } satisfies StoredLayoutsEnvelope);
 }

@@ -53,7 +53,5 @@ export function useOptionalAppSidebar(): AppSidebarContextValue | null {
   return React.useContext(AppSidebarContext);
 }
 
-/** Matches `AppShellLayout` width so the dashboard lines up with the main column. */
-export function appShellContentMaxWidthClass(sidebarCollapsed: boolean): string {
-  return sidebarCollapsed ? "max-w-[min(100%,1920px)]" : "max-w-[1480px]";
-}
+/** Expanded sidebar width (px) — keep in sync with `Sidebar` shell. */
+export const APP_SIDEBAR_EXPANDED_PX = 260;

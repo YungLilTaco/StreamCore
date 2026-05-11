@@ -9,7 +9,6 @@ import {
   Clapperboard,
   Coins,
   LayoutDashboard,
-  Layers,
   Mic,
   Music2,
   Palette,
@@ -25,7 +24,13 @@ import {
 import { motion } from "@/components/motion/motion";
 import { cn } from "@/components/lib/cn";
 import { useTranslation } from "react-i18next";
-import { useAppSidebar } from "@/components/app/AppSidebarContext";
+import { APP_SIDEBAR_EXPANDED_PX, useAppSidebar } from "@/components/app/AppSidebarContext";
+
+/** Viewport-fixed rail toggle: below app header (`4rem`) + same inset as former rail `pt-3`. */
+const SIDEBAR_RAIL_TOGGLE_TOP = "top-[calc(4rem+0.75rem)]";
+
+/** `w-9` / `h-9` — used to pin the expanded control flush to the rail’s right / border line. */
+const RAIL_TOGGLE_PX = 36;
 
 type Item = {
   href: string;
@@ -50,58 +55,47 @@ const items: Item[] = [
   { href: "/app/settings", label: "navSettings", icon: <Settings className="h-4 w-4" /> }
 ];
 
+/**
+ * Two parts:
+ *   1. An in-flow **spacer** (`<div aria-hidden>`) sized to the current expanded/collapsed width.
+ *      It does nothing visually — it just occupies a column in the flex row so the main content is
+ *      pushed when the menu is open and slides back when it's closed.
+ *   2. A **fixed visual panel** glued to `top: 4rem; left: 0` of the viewport. Because it's
+ *      `position: fixed`, scrolling the page doesn't move it — the entire menu stays put while the
+ *      rest of the dashboard scrolls beneath. No sticky/parent-height-chain gotchas.
+ *
+ * The toggle button is also `position: fixed` and animates its `left` between the two anchor
+ * positions in lockstep with the panel's width.
+ */
 export function Sidebar() {
   const pathname = usePathname();
   const { t } = useTranslation();
   const { sidebarCollapsed, setSidebarCollapsed } = useAppSidebar();
 
-  if (sidebarCollapsed) {
-    return (
-      <aside className="relative hidden w-0 shrink-0 overflow-visible md:block">
-        <button
-          type="button"
-          onClick={() => setSidebarCollapsed(false)}
-          className={cn(
-            "absolute left-0 top-24 z-30 flex h-11 w-9 items-center justify-center rounded-r-lg",
-            "border border-l-0 border-white/10 bg-black/50 text-white/85 shadow-lg backdrop-blur",
-            "hover:bg-black/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-          )}
-          aria-label={t("navShowMenu", { defaultValue: "Show menu" })}
-        >
-          <PanelLeftOpen className="h-5 w-5" />
-        </button>
-      </aside>
-    );
-  }
+  const targetWidth = sidebarCollapsed ? 0 : APP_SIDEBAR_EXPANDED_PX;
 
   return (
-    <aside className="hidden shrink-0 md:block">
-      <div className="sticky top-16 h-[calc(100vh-4rem)] w-[320px] border-r border-white/10 bg-black/20 backdrop-blur">
-        <div className="flex h-full flex-col gap-4 px-4 py-6">
-          <div className="flex items-center justify-between gap-2 px-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 ring-1 ring-primary/25">
-                <Layers className="h-5 w-5 text-white" />
-              </div>
-              <div className="truncate text-sm font-semibold text-white">
-                Stream<span className="text-white/70">Core</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSidebarCollapsed(true)}
-              className={cn(
-                "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10",
-                "bg-white/[0.04] text-white/80 hover:bg-white/[0.08] hover:text-white",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-              )}
-              aria-label={t("navHideMenu", { defaultValue: "Hide menu" })}
-            >
-              <PanelLeftClose className="h-4 w-4" />
-            </button>
-          </div>
+    <>
+      <div
+        aria-hidden="true"
+        className="hidden shrink-0 transition-[width] duration-300 ease-in-out motion-reduce:transition-none md:block"
+        style={{ width: targetWidth }}
+      />
 
-          <nav className="flex-1 overflow-auto pr-1 [scrollbar-gutter:stable]">
+      <aside
+        className={cn(
+          "fixed left-0 top-16 z-30 hidden overflow-hidden border-r bg-zinc-950",
+          "transition-[width,border-color] duration-300 ease-in-out motion-reduce:transition-none md:block",
+          sidebarCollapsed ? "border-transparent" : "border-[#22c55e]/10"
+        )}
+        style={{ width: targetWidth, height: "calc(100vh - 4rem)" }}
+        aria-label="Primary navigation"
+      >
+        <div
+          className="flex h-full flex-col pt-14 pb-4 pl-3 pr-2"
+          style={{ width: APP_SIDEBAR_EXPANDED_PX }}
+        >
+          <nav className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
             <div className="flex flex-col gap-2">
               {items.map((item) => {
                 const isActive = pathname === item.href;
@@ -138,13 +132,36 @@ export function Sidebar() {
               })}
             </div>
           </nav>
-
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs text-white/60">
-            Tip: This is a single-page demo. Most items below are placeholder sections (for now).
-          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+
+      <button
+        type="button"
+        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+        style={{
+          left: sidebarCollapsed ? 0 : APP_SIDEBAR_EXPANDED_PX - RAIL_TOGGLE_PX
+        }}
+        className={cn(
+          "fixed z-[45] flex h-9 w-9 items-center justify-center shadow-lg",
+          "transition-[left] duration-300 ease-in-out motion-reduce:transition-none",
+          SIDEBAR_RAIL_TOGGLE_TOP,
+          "border border-[#22c55e]/15 bg-zinc-950 text-white/85 hover:bg-zinc-900 hover:text-white",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+          sidebarCollapsed ? "rounded-r-lg border-l-0" : "rounded-l-lg border-r-0"
+        )}
+        aria-label={
+          sidebarCollapsed
+            ? t("navShowMenu", { defaultValue: "Show menu" })
+            : t("navHideMenu", { defaultValue: "Hide menu" })
+        }
+        aria-expanded={!sidebarCollapsed}
+      >
+        {sidebarCollapsed ? (
+          <PanelLeftOpen className="h-4 w-4" aria-hidden />
+        ) : (
+          <PanelLeftClose className="h-4 w-4" aria-hidden />
+        )}
+      </button>
+    </>
   );
 }
-

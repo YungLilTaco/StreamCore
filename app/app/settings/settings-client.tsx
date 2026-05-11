@@ -9,6 +9,7 @@ type Account = { provider: string; scope: string | null; expires_at: number | nu
 type Consent = { id: string; provider: string; scopes: string; grantedAt: Date };
 
 const twitchScopes = [
+  "openid",
   "user:read:email",
   "chat:read",
   "chat:edit",
@@ -17,7 +18,13 @@ const twitchScopes = [
   "channel:read:subscriptions",
   "bits:read",
   "channel:read:redemptions",
-  "moderator:manage:shoutouts"
+  "moderator:manage:shoutouts",
+  "channel:read:polls",
+  "channel:read:predictions",
+  "channel:read:hype_train",
+  "channel:read:goals",
+  "moderator:manage:banned_users",
+  "moderator:manage:warnings"
 ];
 
 const spotifyScopes = [

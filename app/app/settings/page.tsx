@@ -20,7 +20,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="min-w-0 flex-1">
-      <div className="mx-auto max-w-7xl px-4 py-10">
+      <div className="w-full px-4 py-10 sm:px-6">
         <div className="text-xs font-semibold tracking-wider text-primary/90">StreamCore</div>
         <h1 className="mt-3 text-balance text-2xl font-semibold tracking-tight text-white md:text-4xl">
           Settings

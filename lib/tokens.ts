@@ -130,3 +130,37 @@ export async function getProviderAccessToken(userId: string, provider: Provider)
   };
 }
 
+/**
+ * Force a refresh-token rotation right now and persist the result, ignoring `expires_at`.
+ * Throws when the provider rejects the refresh (e.g. the user disconnected the app — they must sign in again).
+ */
+export async function forceRefreshProviderToken(userId: string, provider: Provider) {
+  const account = await prisma.account.findFirst({ where: { userId, provider } });
+  if (!account) throw new Error(`No ${provider} account linked`);
+  if (!account.refresh_token) throw new Error(`No refresh_token for ${provider} account`);
+
+  const refreshed =
+    provider === "twitch"
+      ? await refreshTwitchToken(account.refresh_token)
+      : await refreshSpotifyToken(account.refresh_token);
+
+  const nextRefresh = refreshed.refreshToken ?? account.refresh_token;
+
+  await prisma.account.update({
+    where: { id: account.id },
+    data: {
+      access_token: refreshed.accessToken,
+      refresh_token: nextRefresh,
+      expires_at: refreshed.expiresAt,
+      scope: refreshed.scope ?? account.scope,
+      token_type: refreshed.tokenType ?? account.token_type
+    }
+  });
+
+  return {
+    accessToken: refreshed.accessToken,
+    expiresAt: refreshed.expiresAt,
+    scope: (refreshed.scope ?? account.scope) ?? null
+  };
+}
+
