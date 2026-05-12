@@ -19,10 +19,6 @@ export function StreamPreviewDock({
       title="Stream Preview"
       right={
         <div className="flex items-center gap-2 text-xs text-white/60">
-          <span className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/15 px-2 py-0.5 text-red-200">
-            <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-            LIVE
-          </span>
           <span className="hidden sm:inline">12.4k viewers</span>
         </div>
       }

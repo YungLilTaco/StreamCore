@@ -70,7 +70,18 @@ export const ACTIVITY_FEED_WINDOW_STORAGE_KEY = "sv_activity_feed_window_days_v1
 export const ACTIVITY_FEED_WINDOW_OPTIONS = [7, 30, 90, 180, 365] as const;
 export type ActivityFeedWindowDays = (typeof ACTIVITY_FEED_WINDOW_OPTIONS)[number];
 
-export const ACTIVITY_FEED_WINDOW_DEFAULT: ActivityFeedWindowDays = 180;
+/**
+ * Default time window when a user opens the activity feed for the first time (or after clearing
+ * their preferences). 90 days strikes a good balance:
+ *   - long enough to surface the streamer's last few months of activity even after time off,
+ *   - short enough that the initial Helix paginated reads don't fetch hundreds of thousands of
+ *     follow rows on big channels.
+ *
+ * `hasActiveFilterPreset` in `ActivityFeedDock` uses *equality* with this constant to decide
+ * whether to highlight the filter button — if the user is sitting on the default they get no
+ * highlight, which signals "you're in the out-of-the-box state".
+ */
+export const ACTIVITY_FEED_WINDOW_DEFAULT: ActivityFeedWindowDays = 90;
 
 export const ACTIVITY_FEED_WINDOW_LABELS: Record<ActivityFeedWindowDays, string> = {
   7: "Last week",

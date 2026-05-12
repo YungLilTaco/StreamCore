@@ -107,13 +107,24 @@ body {
   content: none !important;
 }
 
-/* Full-edge side handles. */
+/*
+ * Hitbox sizing (tuned for easy mouse + trackpad grabs without intruding on dock content):
+ *   - Side handles are 12px thick — about 2× the original 6px so the cursor changes well before
+ *     the user is on the exact pixel of the edge. Dock cards have `p-4` (16px) of internal
+ *     padding, so a 12px hitbox lives entirely inside that padding band and never overlaps real
+ *     content like text or buttons.
+ *   - Corner squares are 22×22px and stay layered on top (z-index 2), so they always win the
+ *     hit-test at the four corners and give a generous diagonal-resize grab area.
+ *   - Sides are inset 18px from each corner so the corner squares fully cover their territory;
+ *     z-index already makes corners win regardless, but the inset stops the cursor from
+ *     momentarily flickering between cardinal and diagonal arrows near the meeting point.
+ */
 .react-grid-item > .react-resizable-handle-s,
 .react-grid-item > .react-resizable-handle-n {
-  left: 10px !important;
-  right: 10px !important;
+  left: 18px !important;
+  right: 18px !important;
   width: auto !important;
-  height: 6px !important;
+  height: 12px !important;
 }
 .react-grid-item > .react-resizable-handle-s {
   bottom: 0 !important;
@@ -127,9 +138,9 @@ body {
 }
 .react-grid-item > .react-resizable-handle-w,
 .react-grid-item > .react-resizable-handle-e {
-  top: 10px !important;
-  bottom: 10px !important;
-  width: 6px !important;
+  top: 18px !important;
+  bottom: 18px !important;
+  width: 12px !important;
   height: auto !important;
 }
 .react-grid-item > .react-resizable-handle-w {
@@ -148,8 +159,8 @@ body {
 .react-grid-item > .react-resizable-handle-sw,
 .react-grid-item > .react-resizable-handle-ne,
 .react-grid-item > .react-resizable-handle-nw {
-  width: 14px !important;
-  height: 14px !important;
+  width: 22px !important;
+  height: 22px !important;
   z-index: 2;
 }
 .react-grid-item > .react-resizable-handle-se {
@@ -200,7 +211,38 @@ body:has(.react-grid-item.resizing),
 body:has(.react-grid-item.react-draggable-dragging) {
   user-select: none;
   -webkit-user-select: none;
-  cursor: inherit;
+}
+
+/*
+ * Lock the cursor to the directional resize arrow for the *entire* duration of a resize gesture.
+ *
+ * Why this is needed: react-grid-layout's resize handles set a `cursor` per handle (e.g. ew-resize
+ * on the left/right edges) — but the browser only paints that cursor while the pointer is
+ * *literally hovering* the 6px handle strip. The moment the user drags off the strip — which
+ * happens within a few pixels of starting any drag — the cursor reverts to whatever sits under
+ * the pointer (usually the body's default arrow), and flickers back to the directional cursor
+ * each time the pointer happens to cross a handle again.
+ *
+ * `DashboardGrid` writes a `data-resize-axis` attribute on `<body>` at `onResizeStart` with one
+ * of "x", "y", "nesw" or "nwse" based on which handle was grabbed, and removes it at
+ * `onResizeStop`. The universal-descendant selector (`body[...] *`) forces every element on the
+ * page to inherit the same cursor so it never flickers no matter what's beneath the pointer.
+ */
+body[data-resize-axis="x"],
+body[data-resize-axis="x"] * {
+  cursor: ew-resize !important;
+}
+body[data-resize-axis="y"],
+body[data-resize-axis="y"] * {
+  cursor: ns-resize !important;
+}
+body[data-resize-axis="nwse"],
+body[data-resize-axis="nwse"] * {
+  cursor: nwse-resize !important;
+}
+body[data-resize-axis="nesw"],
+body[data-resize-axis="nesw"] * {
+  cursor: nesw-resize !important;
 }
 
 /* Also lock the moving tile itself, in case `:has()` is unavailable somewhere. */
@@ -211,9 +253,14 @@ body:has(.react-grid-item.react-draggable-dragging) {
 }
 
 /*
- * Drop / resize placeholder: shows where the user's active dock will end up. Tuned to be just
- * present enough to read at a glance — soft purple fill, thin dashed border so it never
- * competes visually with the shrinking-neighbour ring that uses a solid edge.
+ * Drop / move placeholder: shows where the user's active dock will land. Soft purple fill, thin
+ * dashed border so it never competes visually with the shrinking-neighbour ring (solid edge).
+ *
+ * Only colour transitions are animated — NOT transform / width / height. Easing the placeholder
+ * between grid cells looks great on a slow drag but feels broken on a fast one: by the time the
+ * placeholder finishes interpolating to cell N, the user has already crossed into cell N+1, so
+ * it permanently trails the dock. Letting it snap instantly keeps it locked to the *current*
+ * snap target every frame.
  */
 .react-grid-item.react-grid-placeholder {
   opacity: 1 !important;
@@ -227,32 +274,93 @@ body:has(.react-grid-item.react-draggable-dragging) {
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.react-grid-item.react-grid-placeholder.placeholder-resizing {
-  background: rgba(168, 85, 247, 0.08) !important;
-  border-color: rgba(192, 132, 252, 0.40) !important;
+/*
+ * Hide the placeholder entirely during any active gesture (resize or move).
+ *
+ * react-grid-layout's drag/resize is "live": the active dock follows the cursor with pixel
+ * precision, while the placeholder snaps to whole grid cells. That mismatch made the
+ * placeholder look like it was lagging behind the dock — because in a sense it was, by exactly
+ * the sub-grid pixel offset the user had dragged past the last cell boundary. Removing it for
+ * the duration of the gesture means the dock card is the single source of visual truth; on
+ * release the dock snaps to the nearest grid cell with the 140ms ease from the rule below,
+ * which reads as a clean "settle into place" rather than a competing indicator.
+ *
+ * Trigger conditions:
+ *   - `body[data-resize-axis]` — set by `DashboardGrid.onResizeStart` for the cursor lock.
+ *   - `body[data-dragging]` — set by `DashboardGrid.onDragStart` for the same reason.
+ *
+ * Both attributes are written synchronously in their respective `onXxxStart` callbacks, before
+ * React commits the gesture. That matters because the rendered placeholder is part of the same
+ * render frame as the `.react-draggable-dragging` class react-grid-layout assigns — if we
+ * relied on `:has(.react-draggable-dragging)` instead, the placeholder would briefly flash on
+ * mount because the class arrives one frame after RGL has already laid the placeholder out.
+ */
+body[data-resize-axis] .react-grid-item.react-grid-placeholder,
+body[data-dragging] .react-grid-item.react-grid-placeholder {
+  opacity: 0 !important;
 }
 
 /*
- * Live shrink/shift preview ring.
+ * Fluid layout transitions for every dock the resolver is shifting/shrinking out of the way.
  *
- * `DashboardGrid` toggles `.sv-dock-shrinking` on the wrapper div of every dock the resolver is
- * currently shrinking or shifting during the drag. We then show the dock at its projected
- * (post-drop) size — RGL renders it that way for free because we update the layout live — and
- * make the dock body translucent so the user reads the outline as the future shape rather than
- * the current contents.
+ * `react-grid-layout` re-renders these tiles at the next grid cell whenever the active dock
+ * crosses a boundary, so without a transition they teleport instantly. We exclude the actively
+ * dragged or resized tile (`.react-draggable-dragging`, `.resizing`) because that one's
+ * transform is updated every cursor frame to follow the pointer — a transition there would
+ * trail behind the cursor and feel awful.
  *
- * Layering trick: the outline lives on a `::before` pseudo-element on the wrapper, so it stays
- * fully opaque even when we set `opacity` on the dock card inside.
+ * `cubic-bezier(0.2, 0.7, 0.2, 1)` is a snappy ease-out: rapid start, soft landing. Matches the
+ * placeholder timing so a placeholder and an adjacent shrinking neighbour both come to rest on
+ * the same beat.
+ */
+.react-grid-item:not(.react-draggable-dragging):not(.resizing):not(.react-grid-placeholder) {
+  transition:
+    transform 140ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    width 140ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    height 140ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/*
+ * Live shrink/shift preview.
+ *
+ * `DashboardGrid` toggles `.sv-dock-shrinking` on the wrapper div of every dock the resolver
+ * is currently shrinking or shifting during the drag. The dock body stays at its pre-drag
+ * size (the grid layout intentionally isn't updated for non-intruder items mid-gesture) and we
+ * just fade it out heavily so the user reads it as "this is where the dock is right now,
+ * disappearing soon". The actual purple outline showing the *future* size is drawn by an
+ * absolute-positioned overlay layer in `DashboardGrid.tsx`, anchored to the resolver's
+ * projected slot — that's the only way to show "outline = where I'm going" while "body = where
+ * I am" at the same time.
  */
 .sv-dock-wrap {
   /* RGL sets inline width/height on this element — we never override sizing here. The class
-     exists for transitions and as the toggle target for the ring. */
+     exists for transitions and as the toggle target for the fade. */
   transition: box-shadow 140ms ease;
 }
 
-/* The opaque, soft-purple outline showing the projected size. Doesn't fade with the card. */
+/*
+ * Performance: disable `backdrop-filter` on the actively dragged/resized dock.
+ *
+ * `backdrop-blur` on a transforming element forces the compositor to re-rasterize the blur
+ * pass every frame, which on integrated GPUs (and on Chromium's software compositor fallback)
+ * dominates the cost of a drag. The dock card normally inherits a `backdrop-blur-md` via
+ * `DockShell`, but the moment a gesture is active the card is on the move — there's nothing
+ * useful behind it to blur anyway, so we drop the filter for that one tile and let the
+ * GPU just translate the cached layer. The blur snaps back the instant the gesture ends.
+ */
+.react-grid-item.react-draggable-dragging .sv-dock-wrap > *,
+.react-grid-item.resizing .sv-dock-wrap > *,
+body[data-dragging] .react-grid-item.react-draggable-dragging *,
+body[data-resize-axis] .react-grid-item.resizing * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Reserved for legacy callers; the outline is now drawn by the overlay layer. Hide just in
+   case some other CSS resurrects the pseudo-element. */
 .sv-dock-shrinking::before {
   content: "";
+  display: none;
   position: absolute;
   inset: 0;
   border: 1.5px solid rgba(168, 85, 247, 0.65);
@@ -265,9 +373,10 @@ body:has(.react-grid-item.react-draggable-dragging) {
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-/* Fade the actual dock content so the outline reads as "this is where it's going". */
+/* Fade the dock body to a faint ghost. The overlay layer renders the projected-size outline
+   on top, so the user reads the relationship as "outline = future, faded body = present". */
 .sv-dock-shrinking > * {
-  opacity: 0.35;
+  opacity: 0.18;
   transition: opacity 140ms ease;
 }
 

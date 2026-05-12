@@ -415,6 +415,27 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
       () => new Set()
     );
 
+    /**
+     * Resolver-projected layout shown as an overlay outline during an in-flight gesture.
+     *
+     * The bottom dock is supposed to read "outline = where I'm going, faded body = where I am
+     * right now". To pull that off, the live `layouts` state keeps every non-intruder dock at
+     * its pre-drag size (so the dock body literally doesn't move), while this state holds the
+     * resolver's full output for the same frame. We then draw an absolute-positioned outline
+     * for each `shrinkingIds` member at its projected slot. On gesture stop, the resolver
+     * output is committed into `layouts` and this state is cleared.
+     */
+    const [projectedLayout, setProjectedLayout] = React.useState<Layout[] | null>(null);
+
+    /**
+     * Wrapper element around `ResponsiveGridLayout`. The wrapper exists purely to anchor the
+     * absolute-positioned outline overlay below — it's `position: relative`, has no padding or
+     * border, and inherits its width from the parent, which means the overlay's `calc(100%…)`
+     * expressions resolve against the exact same width that RGL itself sees for the grid (both
+     * read the same parent content width). We *don't* need a measured pixel width anywhere in
+     * React, which sidesteps a whole class of HMR/timing bugs.
+     */
+
     React.useEffect(() => {
       try {
         const rawLayouts =
@@ -439,16 +460,54 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
       }
     }, []);
 
+    /**
+     * Persist layout state to `localStorage` — debounced and gesture-gated.
+     *
+     * Why this isn't a naïve `useEffect` that fires on every state change:
+     *   - During a drag/resize, `layouts` updates ~60×/sec. Three synchronous `localStorage`
+     *     writes per tick (≈180/sec, each ~1-3ms of JSON.stringify + main-thread IO) was the
+     *     biggest single contributor to drag lag and rubber-banding.
+     *   - localStorage is only consulted on initial mount as a faster-than-network warm cache.
+     *     There's no consumer that needs sub-second freshness, so a 500ms debounce is
+     *     indistinguishable from "instant" for the user and saves ~150 writes per drag.
+     *   - We also skip writes entirely while a gesture is active (`projectedLayout` is set);
+     *     the commit at gesture stop fires the effect once with the final values.
+     *
+     * Each of the three storage entries is compared against its last-written serialized form
+     * before issuing a `setItem` so unrelated state churn (e.g. visible array unchanged but
+     * `layouts` moved) doesn't trigger a redundant write of the unchanged blob.
+     */
+    const localStorageWrittenRef = React.useRef<{
+      layouts: string | null;
+      visible: string | null;
+      locks: string | null;
+    }>({ layouts: null, visible: null, locks: null });
+
     React.useEffect(() => {
-      try {
-        // Write the v2 versioned envelope so the next load short-circuits the migration path.
-        window.localStorage.setItem(STORAGE_KEY, serializeLayouts(layouts));
-        window.localStorage.setItem(STORAGE_VISIBLE_KEY, JSON.stringify(visible));
-        window.localStorage.setItem(STORAGE_LOCKED_KEY, dockLocksCanonicalJson(dockLocks));
-      } catch {
-        // ignore
-      }
-    }, [layouts, visible, dockLocks]);
+      if (projectedLayout) return; // mid-gesture, defer
+      const handle = window.setTimeout(() => {
+        try {
+          const layoutsSerialized = serializeLayouts(layouts);
+          if (layoutsSerialized !== localStorageWrittenRef.current.layouts) {
+            window.localStorage.setItem(STORAGE_KEY, layoutsSerialized);
+            localStorageWrittenRef.current.layouts = layoutsSerialized;
+          }
+          const visibleSerialized = JSON.stringify(visible);
+          if (visibleSerialized !== localStorageWrittenRef.current.visible) {
+            window.localStorage.setItem(STORAGE_VISIBLE_KEY, visibleSerialized);
+            localStorageWrittenRef.current.visible = visibleSerialized;
+          }
+          const locksSerialized = dockLocksCanonicalJson(dockLocks);
+          if (locksSerialized !== localStorageWrittenRef.current.locks) {
+            window.localStorage.setItem(STORAGE_LOCKED_KEY, locksSerialized);
+            localStorageWrittenRef.current.locks = locksSerialized;
+          }
+        } catch {
+          /* quota exceeded / disabled — fall back to in-memory only */
+        }
+      }, 500);
+      return () => window.clearTimeout(handle);
+    }, [layouts, visible, dockLocks, projectedLayout]);
 
     React.useEffect(() => {
       if (!ready || !channelTwitchId) {
@@ -575,38 +634,50 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
       [visible, channelTwitchId, ready, persistToServer]
     );
 
+    /**
+     * Add or re-show a dock from the "Add Dock" menu.
+     *
+     * IMPORTANT: we always WRITE a fresh layout entry with full default size, even when a stale
+     * entry exists from a previous session. `hideDock` only flips `visible` off — the layout row
+     * stays so resizing-then-toggling round-trips correctly. The downside is that a dock that was
+     * shrunk to its minimum (or a row left over from a v1→v3 migration) would otherwise re-open
+     * at a tiny size, which is what made docks "EXTREMELY small and i cant see them". Always
+     * resetting to `DEFAULT_DOCK_W × meta.h` on menu-add makes the experience predictable.
+     *
+     * Placement: appended below every other dock (maxY + 1) and resolved through
+     * `applyIntruderShrink` so callers passing explicit `opts.x/y` can drop the dock anywhere
+     * without risking overlap. After the commit we smooth-scroll to the bottom of the page over
+     * two `requestAnimationFrame` ticks — that way the scroll runs *after* React has laid out the
+     * new row, so `documentElement.scrollHeight` reflects the grown grid rather than the stale
+     * pre-add height.
+     */
     function addDock(key: DockKey, opts?: { x?: number; y?: number; w?: number; h?: number }) {
       setVisible((v) => (v.includes(key) ? v : [...v, key]));
       const meta = DOCK_GRID_METRICS[key];
-      const w = opts?.w ?? DEFAULT_DOCK_W;
-      const h = opts?.h ?? meta.h;
+      const w = Math.max(opts?.w ?? DEFAULT_DOCK_W, meta.minW);
+      const h = Math.max(opts?.h ?? meta.h, meta.minH);
 
       setLayouts((prev) => {
-        const next: Layouts = { ...prev };
-        const bps = Object.keys(next) as (keyof Layouts)[];
-
+        const base = ((prev.lg ?? []) as Layout[])
+          .filter((l) => l.i !== key)
+          .map(sanitizeLayoutItem);
+        const maxY = base.reduce((m, l) => Math.max(m, l.y + l.h), 0);
         const x = opts?.x ?? 0;
-        const yBase = opts?.y;
-        for (const bp of bps) {
-          const arr = ((next[bp] ?? []) as Layout[]).slice();
-          if (!arr.find((l) => l.i === key)) {
-            const maxY = arr.reduce((m, l) => Math.max(m, l.y + l.h), 0);
-            const y = yBase ?? maxY + 1;
-            arr.push({
-              i: key,
-              x,
-              y,
-              w,
-              h: Math.max(h, meta.minH),
-              minW: meta.minW,
-              minH: meta.minH
-            });
-          }
-          next[bp] = arr;
-        }
-        return next;
+        const y = opts?.y ?? maxY + 1;
+        const intruder: Layout = { i: key, x, y, w, h, minW: meta.minW, minH: meta.minH };
+        const next = applyIntruderShrink(base, intruder, GRID_COLS, lockedIds);
+        return replicateLayoutToAllBreakpoints(next);
       });
       setDockMenuOpen(false);
+
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          window.scrollTo({
+            top: document.documentElement.scrollHeight,
+            behavior: "smooth"
+          });
+        });
+      });
     }
 
     function hideDock(key: DockKey) {
@@ -638,14 +709,24 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
     /**
      * Shared drag/resize reducer.
      *
-     * Computes the projected layout from the pre-drag snapshot + the current intruder position,
-     * applies it, and updates `shrinkingIds` so any dock whose size/position differs from its
-     * snapshot gets the purple "I'm being adjusted" outline.
+     * Computes the projected layout from the pre-drag snapshot + the current intruder position
+     * and updates `shrinkingIds` so any dock whose size/position differs from its snapshot gets
+     * the purple "this is where I'm going" outline overlay.
      *
      * The `commit` parameter switches between two operating modes:
-     *   - `false` (during drag/resize): persisted state can be updated freely, but we don't
-     *     clear the original-layout ref because more events are still coming.
-     *   - `true` (on stop): final commit, also clears the ref and the shrinking-id set.
+     *
+     *   - `false` (during drag/resize) — split state:
+     *       `layouts` is updated to a hybrid layout where only the intruder follows the
+     *       cursor; every other dock stays at its pre-drag slot. The resolver's *real* output
+     *       (with shrinks/shifts applied) is mirrored into `projectedLayout` and rendered as
+     *       absolute-positioned outlines on top. Effect: the user sees the bottom dock fade
+     *       in place while a purple ghost outline previews its post-drop shape.
+     *
+     *   - `true` (on stop) — full commit:
+     *       The resolver output is written to `layouts` (so docks animate from their
+     *       pre-drag bounds to their new bounds), `projectedLayout` is cleared, and the
+     *       shrinking-id set is dropped on a short delay so the new shape is visible briefly
+     *       before the highlight fades.
      */
     const applyIntruder = React.useCallback(
       (newItem: Layout, commit: boolean) => {
@@ -667,13 +748,36 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
           }
         }
         setShrinkingIds(adjusted);
-        setLayouts(replicateLayoutToAllBreakpoints(next));
 
         if (commit) {
+          setLayouts(replicateLayoutToAllBreakpoints(next));
+          setProjectedLayout(null);
+          setShrinkingIds(new Set());
           dragOriginalLayoutRef.current = null;
-          // Defer clearing the ring one frame so the user sees the final shape briefly.
-          window.setTimeout(() => setShrinkingIds(new Set()), 80);
+          return;
         }
+
+        // In-flight: freeze every non-intruder dock at its pre-drag position so the user
+        // perceives the dock body as "still here", while the overlay layer below renders the
+        // resolver's projected slots.
+        const inflight: Layout[] = [];
+        let placed = false;
+        for (const it of base) {
+          if (it.i === intruder.i) {
+            inflight.push(intruder);
+            placed = true;
+          } else {
+            inflight.push(it);
+          }
+        }
+        if (!placed) inflight.push(intruder);
+
+        // Drag-tick fast path: skip the full breakpoint replication (5 deep copies × 8 docks ×
+        // every frame). Only `lg` actually drives the visible grid during a gesture — the
+        // smaller breakpoints will be replicated from the final layout when `applyIntruder`
+        // runs with `commit=true` on gesture stop, which is one allocation instead of dozens.
+        setLayouts((prev) => ({ ...prev, lg: inflight }));
+        setProjectedLayout(next);
       },
       [layouts, lockedIds]
     );
@@ -683,18 +787,146 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
     }, [layouts]);
 
     /**
+     * Move-gesture start/stop wrapper that toggles `body[data-dragging]`.
+     *
+     * Hiding the placeholder during a move relies on detecting an active gesture as early as
+     * possible. We could just CSS-select `body:has(.react-grid-item.react-draggable-dragging)`,
+     * but that class arrives one render frame *after* RGL has already mounted its placeholder,
+     * so the user briefly sees the placeholder flash before the rule fires. Setting a data
+     * attribute on `<body>` synchronously in `onDragStart` closes that window — the CSS rule
+     * matches immediately and the placeholder is hidden from the first frame of the gesture.
+     */
+    const handleDragStart = React.useCallback(() => {
+      handleInteractionStart();
+      document.body.dataset.dragging = "1";
+    }, [handleInteractionStart]);
+
+    const handleDragStop = React.useCallback(
+      (_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
+        applyIntruder(newItem, true);
+        delete document.body.dataset.dragging;
+      },
+      [applyIntruder]
+    );
+
+    /**
+     * Pick the resize cursor axis ("x" / "y" / "nesw" / "nwse") from the handle element that
+     * react-grid-layout passes to `onResizeStart` as its 6th arg. We compare against the
+     * canonical `react-resizable-handle-XX` token list so partial matches (e.g. "handle-n"
+     * accidentally matching "handle-ne") can't happen.
+     *
+     * Returns null when we can't identify the handle, in which case we skip setting the cursor
+     * lock — the existing per-handle CSS cursors are still good enough on their own.
+     */
+    const resolveResizeAxis = React.useCallback((element: unknown): string | null => {
+      if (!(element instanceof HTMLElement)) return null;
+      const tokens = element.className.split(/\s+/);
+      const has = (t: string) => tokens.includes(`react-resizable-handle-${t}`);
+      if (has("n") || has("s")) return "y";
+      if (has("e") || has("w")) return "x";
+      if (has("se") || has("nw")) return "nwse";
+      if (has("ne") || has("sw")) return "nesw";
+      return null;
+    }, []);
+
+    /**
+     * Lock the page-wide cursor for the duration of a resize gesture.
+     *
+     * Without this, the directional resize cursor (e.g. `ew-resize`) only paints while the
+     * pointer is literally hovering the 6px handle strip — drag off it and the cursor reverts
+     * to whatever sits under the pointer, then snaps back to the directional cursor whenever
+     * the pointer happens to cross a handle. Setting `body[data-resize-axis]` lets the CSS in
+     * `globals.css` force the directional cursor on every element until we clear it.
+     */
+    const handleResizeStart = React.useCallback(
+      (
+        _layout: Layout[],
+        _oldItem: Layout,
+        _newItem: Layout,
+        _placeholder: Layout,
+        _e: MouseEvent,
+        element: HTMLElement
+      ) => {
+        handleInteractionStart();
+        const axis = resolveResizeAxis(element);
+        if (axis) document.body.dataset.resizeAxis = axis;
+      },
+      [handleInteractionStart, resolveResizeAxis]
+    );
+
+    const handleResizeStop = React.useCallback(
+      (_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
+        applyIntruder(newItem, true);
+        delete document.body.dataset.resizeAxis;
+      },
+      [applyIntruder]
+    );
+
+    /**
+     * Belt-and-braces cleanup: if the dock unmounts mid-gesture for any reason, drop both the
+     * cursor lock and the dragging flag so the rest of the app doesn't get stuck in a
+     * resize cursor or rendering a hidden placeholder.
+     */
+    React.useEffect(() => {
+      return () => {
+        delete document.body.dataset.resizeAxis;
+        delete document.body.dataset.dragging;
+      };
+    }, []);
+
+    /**
      * Wrapper-div className for the dock identified by `key`.
      *
      * When the resolver has flagged the dock as currently being shrunk/shifted, we tag the
-     * wrapper with `sv-dock-shrinking` so `globals.css` can render a soft purple outline
-     * matching the placeholder. The base class keeps a smooth size transition so the dock
-     * appears to *grow back* when the user pulls the intruder away from it.
+     * wrapper with `sv-dock-shrinking` so `globals.css` fades the dock contents. The actual
+     * purple outline preview is drawn by the absolute-positioned overlay layer below (sized
+     * from `projectedLayout`) rather than by `::before` on this wrapper — that's why the
+     * outline can sit at the dock's *future* slot while the dock body stays where it is.
      */
     const shrinkClass = React.useCallback(
       (key: DockKey) =>
         cn("sv-dock-wrap", shrinkingIds.has(key) && "sv-dock-shrinking"),
       [shrinkingIds]
     );
+
+    /**
+     * Translate a grid item's `{x,y,w,h}` into a fully self-contained set of CSS values that
+     * the browser will resolve against the wrapper's own width. Mirrors RGL's internal
+     * `calcGridItemPosition` math but expressed in `calc(...)` form so we don't need a measured
+     * `gridWidth` state at all — even if our resize observer hasn't fired yet, the outline
+     * still lines up perfectly with where the actual dock will land on commit.
+     *
+     * Derivation (matches react-grid-layout's `calcGridItemPosition` exactly, since both
+     * `containerPadding` values are 0):
+     *   colWidth   = (100% - marginX * (cols - 1)) / cols
+     *   left(x)    = x * (colWidth + marginX)
+     *   width(w)   = w * colWidth + (w - 1) * marginX
+     *   top(y)     = y * (rowHeight + marginY)
+     *   height(h)  = h * rowHeight + (h - 1) * marginY
+     *
+     * Constants below must match the `<ResponsiveGridLayout>` props (margin/rowHeight/cols).
+     */
+    const projectedOutlines = React.useMemo(() => {
+      if (!projectedLayout || shrinkingIds.size === 0) return null;
+
+      const marginX = 4;
+      const marginY = 8;
+      const rowHeight = 15;
+      const totalGapPx = marginX * (GRID_COLS - 1);
+      const colWidthExpr = `((100% - ${totalGapPx}px) / ${GRID_COLS})`;
+
+      return projectedLayout
+        .filter((item) => shrinkingIds.has(String(item.i)))
+        .map((item) => {
+          const xGap = item.x * marginX;
+          const wGap = Math.max(0, item.w - 1) * marginX;
+          const left = `calc(${item.x} * ${colWidthExpr} + ${xGap}px)`;
+          const width = `calc(${item.w} * ${colWidthExpr} + ${wGap}px)`;
+          const top = item.y * (rowHeight + marginY);
+          const height = item.h * rowHeight + Math.max(0, item.h - 1) * marginY;
+          return { id: String(item.i), left, top, width, height };
+        });
+    }, [projectedLayout, shrinkingIds]);
 
     return (
       <div className="relative">
@@ -757,6 +989,7 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
            *     so the underlying dock(s) shrink toward the side where the intruder landed
            *     instead of being shoved across the grid.
            */}
+          <div className="relative">
           <ResponsiveGridLayout
             className="layout"
             layouts={layoutsForGrid}
@@ -779,12 +1012,12 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
             compactType={null}
             preventCollision={false}
             allowOverlap
-            onDragStart={handleInteractionStart}
+            onDragStart={handleDragStart}
             onDrag={(_layout, _oldItem, newItem) => applyIntruder(newItem as Layout, false)}
-            onDragStop={(_layout, _oldItem, newItem) => applyIntruder(newItem as Layout, true)}
-            onResizeStart={handleInteractionStart}
+            onDragStop={handleDragStop}
+            onResizeStart={handleResizeStart}
             onResize={(_layout, _oldItem, newItem) => applyIntruder(newItem as Layout, false)}
-            onResizeStop={(_layout, _oldItem, newItem) => applyIntruder(newItem as Layout, true)}
+            onResizeStop={handleResizeStop}
             isDroppable
             droppingItem={{ i: "__dropping__", w: DEFAULT_DOCK_W, h: DEFAULT_DROP_H }}
             onDrop={(_layout, item, e) => {
@@ -888,6 +1121,45 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
               </div>
             ) : null}
           </ResponsiveGridLayout>
+
+          {/**
+           * Projected-slot preview overlay.
+           *
+           * Sits on top of the grid (z-30) but is pointer-events:none so it never steals clicks
+           * from the docks underneath. Each rectangle is sized from `projectedLayout` — the
+           * post-resolver shape every "shrinking" dock will adopt the moment the gesture ends.
+           * The dock bodies themselves stay at their pre-drag size (faded via
+           * `.sv-dock-shrinking`) so the user can read "outline = future, faded body = present".
+           *
+           * All visual styles are inline rather than Tailwind classes so they apply even if the
+           * arbitrary-value JIT pass misses them on a hot-reload cycle, and so the purple ring
+           * always reads as the dominant signal regardless of theme tweaks.
+           */}
+          {projectedOutlines && projectedOutlines.length > 0 ? (
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{ zIndex: 30 }}
+            >
+              {projectedOutlines.map((o) => (
+                <div
+                  key={`projection-${o.id}`}
+                  style={{
+                    position: "absolute",
+                    left: o.left,
+                    top: o.top,
+                    width: o.width,
+                    height: o.height,
+                    borderRadius: 12,
+                    border: "2px solid rgba(168, 85, 247, 0.85)",
+                    backgroundColor: "rgba(168, 85, 247, 0.10)",
+                    boxShadow:
+                      "inset 0 0 0 1px rgba(168, 85, 247, 0.35), 0 0 28px rgba(168, 85, 247, 0.30)"
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
+          </div>
 
           <div className="mt-4 text-xs text-white/45">
             Tip: Use the dock’s (X) button to close it. Re-add it from “Add Dock”.

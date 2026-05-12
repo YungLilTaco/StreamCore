@@ -40,7 +40,7 @@ export const DOCK_GRID_METRICS: Record<
   quickActions: { minH: 12, h: 12, minW: 32 },
   quickClip: { minH: 8, h: 8, minW: 24 },
   spotifyBridge: { minH: 14, h: 14, minW: 32 },
-  soundMixer: { minH: 16, h: 16, minW: 32 },
+  soundMixer: { minH: 9, h: 22, minW: 14 },
   streamInfo: { minH: 22, h: 22, minW: 32 }
 };
 
@@ -95,13 +95,25 @@ function m(key: DashboardDockKey) {
   return DOCK_GRID_METRICS[key];
 }
 
-/** Merge catalog min sizes into a layout item and ensure `h` is at least `minH`. */
+/**
+ * Merge catalog min sizes into a layout item and clamp `h` / `w` so they're never below the
+ * floor.
+ *
+ * The catalog is authoritative: we overwrite any stored `minH`/`minW` with the current catalog
+ * values rather than taking the max. Otherwise *lowering* a min in `DOCK_GRID_METRICS` would not
+ * propagate to already-persisted rows (Math.max would keep the older, higher value), which made
+ * it impossible to shrink a dock further after a code change relaxed its limits.
+ *
+ * Sizes are clamped both ways: `h` is bumped up to `minH` when too small, and we no longer
+ * touch `w` at all (the grid clamps `w` against `minW` on its own at render time, and users can
+ * legitimately set widths smaller than a stale minW from a previous app version).
+ */
 export function normalizeDashboardLayoutItem(item: Layout): Layout {
   const id = String(item.i);
   if (!DOCK_KEY_SET.has(id)) return item;
   const meta = DOCK_GRID_METRICS[id as DashboardDockKey];
-  const minH = Math.max(item.minH ?? 0, meta.minH);
-  const minW = Math.max(item.minW ?? 0, meta.minW);
+  const minH = meta.minH;
+  const minW = meta.minW;
   const h = Math.max(item.h, minH);
   return { ...item, minH, minW, h };
 }

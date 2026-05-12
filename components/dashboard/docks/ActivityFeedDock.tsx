@@ -21,8 +21,9 @@ import {
   Zap
 } from "lucide-react";
 import { DockShell } from "@/components/dashboard/docks/DockShell";
-import { useTwitchEventSub, type EventSubStatus } from "@/components/dashboard/docks/useTwitchEventSub";
+import { useTwitchEventSub } from "@/components/dashboard/docks/useTwitchEventSub";
 import { useSelectedChannel } from "@/components/app/SelectedChannelProvider";
+import { useIsAnyDockDragging } from "@/components/dashboard/useDockDragging";
 import { cn } from "@/components/lib/cn";
 import { Button } from "@/components/ui/button";
 import { UserProfilePopover } from "@/components/dashboard/UserProfilePopover";
@@ -70,57 +71,6 @@ function readWindowFromStorage(): ActivityFeedWindowDays {
   } catch {
     return ACTIVITY_FEED_WINDOW_DEFAULT;
   }
-}
-
-function EventSubStatusPill({ status }: { status: EventSubStatus }) {
-  let label: string;
-  let tone: "live" | "neutral" | "error";
-  switch (status.phase) {
-    case "live":
-      label = `Live${status.succeeded > 0 ? ` · ${status.succeeded}` : ""}`;
-      tone = "live";
-      break;
-    case "connecting":
-      label = "Connecting…";
-      tone = "neutral";
-      break;
-    case "subscribing":
-      label = "Subscribing…";
-      tone = "neutral";
-      break;
-    case "disconnected":
-      label = "Reconnecting…";
-      tone = "neutral";
-      break;
-    case "error":
-      label = "Live offline";
-      tone = "error";
-      break;
-    case "idle":
-    default:
-      return null;
-  }
-  return (
-    <span
-      title={status.phase === "error" ? status.message : `EventSub WebSocket: ${status.phase}`}
-      className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11px] font-semibold uppercase tracking-wide",
-        tone === "live" && "border-emerald-400/35 bg-emerald-500/10 text-emerald-200",
-        tone === "neutral" && "border-white/10 bg-white/5 text-white/65",
-        tone === "error" && "border-rose-400/30 bg-rose-500/10 text-rose-200"
-      )}
-    >
-      <span
-        className={cn(
-          "h-1.5 w-1.5 rounded-full",
-          tone === "live" && "animate-pulse bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]",
-          tone === "neutral" && "bg-white/40",
-          tone === "error" && "bg-rose-400"
-        )}
-      />
-      {label}
-    </span>
-  );
 }
 
 /**
@@ -249,6 +199,14 @@ export function ActivityFeedDock({
     () => !!channels.find((c) => c.channelTwitchId === channelTwitchId)?.isSelf,
     [channels, channelTwitchId]
   );
+  /**
+   * While any dock is being dragged/resized, suppress framer-motion's `layout` animations on
+   * every row. Otherwise each row's bounding rect changes every frame (because the parent
+   * dock's transform is shifting), which kicks off a fresh spring toward the new position —
+   * the contents visibly rubber-band behind the dock card. With `layout` disabled the rows
+   * just translate with their parent like static markup, which is exactly what we want.
+   */
+  const isDockGestureActive = useIsAnyDockDragging();
   const [allItems, setAllItems] = React.useState<ActivityFeedItemDTO[]>([]);
   const [warnings, setWarnings] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -259,7 +217,7 @@ export function ActivityFeedDock({
   const [nowMs, setNowMs] = React.useState(() => Date.now());
 
   // EventSub WS: real-time durable events for own channel only (Twitch token must == broadcaster).
-  const { status: eventSubStatus, liveEvents } = useTwitchEventSub({
+  const { liveEvents } = useTwitchEventSub({
     enabled: ready && isSelfChannel,
     channelTwitchId
   });
@@ -290,9 +248,11 @@ export function ActivityFeedDock({
     return () => window.clearInterval(id);
   }, []);
 
-  React.useEffect(() => {
-    setNowMs(Date.now());
-  }, [allItems, liveEvents]);
+  // Note: a previous version of this code also called `setNowMs(Date.now())` from an effect
+  // that depended on `[allItems, liveEvents]`. That fired on every incoming EventSub message
+  // and every Helix refresh, forcing a re-render of every row in the feed for no benefit (the
+  // 10s ticker above already keeps timestamps fresh enough — humans don't notice a "2m ago"
+  // turning into "2m ago" half a second sooner). The redundant effect was removed.
 
   const load = React.useCallback(() => {
     if (!ready || !channelTwitchId) return;
@@ -397,8 +357,6 @@ export function ActivityFeedDock({
     [filters, windowDays]
   );
 
-  const liveStatusPill = isSelfChannel ? <EventSubStatusPill status={eventSubStatus} /> : null;
-
   const filterControl = (
     <DropdownMenu open={filterMenuOpen} onOpenChange={setFilterMenuOpen}>
       <DropdownMenuTrigger asChild>
@@ -458,12 +416,7 @@ export function ActivityFeedDock({
   return (
     <DockShell
       title="Activity Feed"
-      right={
-        <div className="flex items-center gap-1.5">
-          {liveStatusPill}
-          {filterControl}
-        </div>
-      }
+      right={filterControl}
       dragHandleProps={dragHandleProps}
       onClose={onClose}
       dockLocked={dockLocked}
@@ -524,13 +477,17 @@ export function ActivityFeedDock({
                 )}
               </div>
             ) : null}
-            <AnimatePresence initial={false} mode="popLayout">
+            <AnimatePresence initial={false} mode={isDockGestureActive ? "wait" : "popLayout"}>
               {filteredItems.map((e) => (
                 <motion.div
                   key={e.id}
-                  layout
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  // `layout` re-measures the rect every render — fine when the dock is still,
+                  // catastrophic when the dock's transform is updating per-frame during a
+                  // drag/resize. We flip it off for the duration of the gesture so rows move
+                  // with the dock as a rigid block.
+                  layout={!isDockGestureActive}
+                  initial={isDockGestureActive ? false : { opacity: 0, y: -10 }}
+                  animate={isDockGestureActive ? false : { opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: 8, transition: { duration: 0.18 } }}
                   transition={{ type: "spring", stiffness: 520, damping: 34 }}
                   className="flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5"

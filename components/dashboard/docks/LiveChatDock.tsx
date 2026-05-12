@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useSelectedChannel } from "@/components/app/SelectedChannelProvider";
 import { useDashboardSession } from "@/components/app/DashboardSessionProvider";
-import { type ChatMessage, type ChatStatus } from "@/components/dashboard/docks/useTwitchChat";
+import { type ChatMessage } from "@/components/dashboard/docks/useTwitchChat";
 import { cn } from "@/components/lib/cn";
 import { UserProfilePopover } from "@/components/dashboard/UserProfilePopover";
 
@@ -78,61 +78,6 @@ function BadgeIcons({ badgesTag, map }: { badgesTag: string; map: ChatBadgeMap }
           />
         );
       })}
-    </span>
-  );
-}
-
-function ChatStatusPill({ status }: { status: ChatStatus }) {
-  let label: string;
-  let tone: "live" | "neutral" | "error";
-  switch (status.phase) {
-    case "live":
-      label = "Live";
-      tone = "live";
-      break;
-    case "loading-credentials":
-      label = "Authenticating…";
-      tone = "neutral";
-      break;
-    case "connecting":
-      label = "Connecting…";
-      tone = "neutral";
-      break;
-    case "joining":
-      label = "Joining…";
-      tone = "neutral";
-      break;
-    case "disconnected":
-      label = "Reconnecting…";
-      tone = "neutral";
-      break;
-    case "error":
-      label = "Offline";
-      tone = "error";
-      break;
-    case "idle":
-    default:
-      return null;
-  }
-  return (
-    <span
-      title={status.phase === "error" ? status.message : `Twitch chat: ${status.phase}`}
-      className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11px] font-semibold uppercase tracking-wide",
-        tone === "live" && "border-emerald-400/35 bg-emerald-500/10 text-emerald-200",
-        tone === "neutral" && "border-white/10 bg-white/5 text-white/65",
-        tone === "error" && "border-rose-400/30 bg-rose-500/10 text-rose-200"
-      )}
-    >
-      <span
-        className={cn(
-          "h-1.5 w-1.5 rounded-full",
-          tone === "live" && "animate-pulse bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]",
-          tone === "neutral" && "bg-white/40",
-          tone === "error" && "bg-rose-400"
-        )}
-      />
-      {label}
     </span>
   );
 }
@@ -274,7 +219,6 @@ export function LiveChatDock({
   return (
     <DockShell
       title="Live Stream Chat"
-      right={<ChatStatusPill status={status} />}
       dragHandleProps={dragHandleProps}
       onClose={onClose}
       dockLocked={dockLocked}
