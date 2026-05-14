@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { Responsive, WidthProvider, type Layout, type Layouts } from "react-grid-layout";
-import { Plus, GripVertical } from "lucide-react";
 import { cn } from "@/components/lib/cn";
 import { useSelectedChannel } from "@/components/app/SelectedChannelProvider";
 
 import {
+  DASHBOARD_GRID_COLS,
   defaultDashboardLayouts,
   DASHBOARD_DEFAULT_VISIBLE,
   DOCK_GRID_METRICS,
@@ -22,6 +23,7 @@ import {
 
 import { StreamPreviewDock } from "@/components/dashboard/docks/StreamPreviewDock";
 import { LiveChatDock } from "@/components/dashboard/docks/LiveChatDock";
+import { RewardsQueueDock } from "@/components/dashboard/docks/RewardsQueueDock";
 import { ActivityFeedDock } from "@/components/dashboard/docks/ActivityFeedDock";
 import { QuickActionsDock } from "@/components/dashboard/docks/QuickActionsDock";
 import { QuickClipDock } from "@/components/dashboard/docks/QuickClipDock";
@@ -36,6 +38,7 @@ type DockKey = DashboardDockKey;
 const DOCKS: { key: DockKey; name: string }[] = [
   { key: "streamPreview", name: "Stream Preview" },
   { key: "liveChat", name: "Live Stream Chat" },
+  { key: "rewardsQueue", name: "Reward Queue" },
   { key: "activityFeed", name: "Activity Feed" },
   { key: "quickActions", name: "Quick Actions" },
   { key: "quickClip", name: "Quick Clip" },
@@ -54,11 +57,8 @@ const STORAGE_VISIBLE_KEY = "sv_streamcore_live_dashboard_visible_v1";
 const STORAGE_KEY_LEGACY = "sv_live_dashboard_layout_v1";
 const STORAGE_VISIBLE_KEY_LEGACY = "sv_live_dashboard_visible_v1";
 
-/**
- * v3 grid defaults (cols=128). A new dock dropped without a width hint spans 48 columns —
- * roughly a third of the viewport, matching the historical default proportion.
- */
-const DEFAULT_DOCK_W = 48;
+/** v4 grid (12 cols): new docks span half the dashboard width unless dropped with a width hint. */
+const DEFAULT_DOCK_W = 6;
 /** Dropping placeholder height (grid rows); individual docks use DOCK_GRID_METRICS.h. */
 const DEFAULT_DROP_H = 12;
 const STORAGE_LOCKED_KEY = "sv_streamcore_live_dashboard_locked_v1";
@@ -70,8 +70,13 @@ function cloneLayouts(l: Layouts): Layouts {
 }
 
 function sanitizeLayoutItem(item: Layout): Layout {
-  const x = item as Layout & { static?: boolean; isDraggable?: boolean; isResizable?: boolean };
-  const { static: _st, isDraggable: _d, isResizable: _r, ...rest } = x;
+  const x = item as Layout & {
+    static?: boolean;
+    isDraggable?: boolean;
+    maxW?: number;
+    maxH?: number;
+  };
+  const { static: _st, isDraggable: _d, maxW: _mw, maxH: _mh, ...rest } = x;
   return rest as Layout;
 }
 
@@ -123,6 +128,23 @@ function breakpointsPatch(prev: Layouts, next: Layouts): Partial<Layouts> {
 /** True iff `a` and `b` share any positive-area pixel. */
 function rectsOverlap(a: Layout, b: Layout): boolean {
   return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+}
+
+/**
+ * Find the first top-left grid slot that fits `w×h`, scanning top-to-bottom so the plus-menu can
+ * always insert even when the bottom row is visually "full" of overlapping legacy tiles.
+ * Falls back to stacking below the lowest occupied row.
+ */
+function pickAddDockOrigin(base: Layout[], w: number, h: number, gridCols: number): { x: number; y: number } {
+  const maxY = base.reduce((m, l) => Math.max(m, l.y + l.h), 0);
+  const scanMaxY = Math.max(maxY + 32, 40);
+  for (let y = 0; y < scanMaxY; y++) {
+    for (let x = 0; x <= gridCols - w; x++) {
+      const probe: Layout = { i: "__probe__", x, y, w, h, minW: 1, minH: 1 };
+      if (!base.some((o) => rectsOverlap(probe, o))) return { x, y };
+    }
+  }
+  return { x: 0, y: maxY + 1 };
 }
 
 /**
@@ -342,8 +364,126 @@ function applyIntruderShrink(
   return layout;
 }
 
-/** Width of the v3 grid in columns. Mirrors the `cols` prop passed to `ResponsiveGridLayout`. */
-const GRID_COLS = 128;
+/** Width of the v4 grid in columns (OBS-style). Mirrors `cols` on `ResponsiveGridLayout`. */
+const GRID_COLS = DASHBOARD_GRID_COLS;
+
+/**
+ * Edge-to-edge packer used by the "Fill dashboard row gaps" toggle.
+ *
+ * Alternates vertical-pack (push every movable item up until it hits an obstacle or y=0) and
+ * horizontal-pack (push every movable item left until it hits an obstacle or x=0). Locked
+ * docks are treated as fixed obstacles — they never move, but movables are allowed to slide
+ * around them. We iterate the two passes until a complete round produces no change (or six
+ * rounds, whichever comes first), so a horizontal slide that frees up vertical space gets a
+ * chance to settle on the next pass.
+ *
+ * Why a custom packer instead of relying on RGL's `compactType="vertical"`: RGL only packs on
+ * the vertical axis. The user-facing requirement is OBS-style edge-to-edge filling on *both*
+ * axes, so neighbours pull together horizontally as well as upward.
+ */
+function packLayoutEdgeToEdge(items: Layout[], lockedIds?: ReadonlySet<string>): Layout[] {
+  const locks = lockedIds ?? new Set<string>();
+  const lockedItems = items.filter((it) => locks.has(String(it.i))).map((it) => ({ ...it }));
+  const movables = items.filter((it) => !locks.has(String(it.i))).map((it) => ({ ...it }));
+
+  for (let pass = 0; pass < 6; pass++) {
+    let changed = false;
+
+    movables.sort((a, b) => a.y - b.y || a.x - b.x);
+    for (const item of movables) {
+      let y = 0;
+      while (true) {
+        const trial: Layout = { ...item, y };
+        const conflict =
+          lockedItems.find((o) => rectsOverlap(trial, o)) ??
+          movables.find((o) => o.i !== item.i && rectsOverlap(trial, o));
+        if (!conflict) break;
+        y = conflict.y + conflict.h;
+      }
+      if (y !== item.y) {
+        item.y = y;
+        changed = true;
+      }
+    }
+
+    movables.sort((a, b) => a.y - b.y || a.x - b.x);
+    for (const item of movables) {
+      const originalX = item.x;
+      let x = 0;
+      while (true) {
+        const trial: Layout = { ...item, x };
+        const conflict =
+          lockedItems.find((o) => rectsOverlap(trial, o)) ??
+          movables.find((o) => o.i !== item.i && rectsOverlap(trial, o));
+        if (!conflict) break;
+        x = conflict.x + conflict.w;
+        if (x + item.w > GRID_COLS) {
+          // Doesn't fit on this row going further right — leave it where it was.
+          x = originalX;
+          break;
+        }
+      }
+      if (x !== item.x) {
+        item.x = x;
+        changed = true;
+      }
+    }
+
+    if (!changed) break;
+  }
+
+  return [...lockedItems, ...movables];
+}
+
+/**
+ * When “fill gaps” is on, grow each unlocked dock into adjacent empty space so rows/columns
+ * read edge-to-edge like OBS, without overlapping other tiles.
+ */
+function expandLayoutFillGaps(items: Layout[], gridCols: number, lockedIds?: ReadonlySet<string>): Layout[] {
+  const locks = lockedIds ?? new Set<string>();
+  const result = items.map((it) => ({ ...sanitizeLayoutItem(it) }));
+
+  for (let pass = 0; pass < 12; pass++) {
+    /** Bottom edge of the bounding box — never grow a tile past empty space below the layout (avoids an infinite h loop). */
+    const maxBottom = result.reduce((m, o) => Math.max(m, o.y + o.h), 0);
+    let changed = false;
+    const order = [...result].sort((a, b) => a.y - b.y || a.x - b.x);
+    for (const item of order) {
+      if (locks.has(String(item.i))) continue;
+      const idx = result.findIndex((r) => r.i === item.i);
+      if (idx < 0) continue;
+
+      while (item.x + item.w < gridCols) {
+        const trial: Layout = { ...item, w: item.w + 1 };
+        if (result.some((o) => o.i !== item.i && rectsOverlap(trial, o))) break;
+        item.w += 1;
+        result[idx] = { ...item };
+        changed = true;
+      }
+
+      while (item.x > 0) {
+        const trial: Layout = { ...item, x: item.x - 1, w: item.w + 1 };
+        if (trial.x + trial.w > gridCols) break;
+        if (result.some((o) => o.i !== item.i && rectsOverlap(trial, o))) break;
+        item.x -= 1;
+        item.w += 1;
+        result[idx] = { ...item };
+        changed = true;
+      }
+
+      while (item.y + item.h < maxBottom) {
+        const trial: Layout = { ...item, h: item.h + 1 };
+        if (result.some((o) => o.i !== item.i && rectsOverlap(trial, o))) break;
+        item.h += 1;
+        result[idx] = { ...item };
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  return result;
+}
 
 /** Default grid with layout entries for every currently visible dock (one canonical lg row, replicated). */
 function defaultLayoutsForVisible(visible: DockKey[]): Layouts {
@@ -374,10 +514,12 @@ export type DashboardGridHandle = {
 type DashboardGridProps = {
   dockMenuOpen: boolean;
   setDockMenuOpen: (v: boolean) => void;
+  fillRowGaps: boolean;
+  onFillRowGapsChange: (next: boolean) => void;
 };
 
 export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGridProps>(
-  function DashboardGrid({ dockMenuOpen, setDockMenuOpen }, ref) {
+  function DashboardGrid({ dockMenuOpen, setDockMenuOpen, fillRowGaps, onFillRowGapsChange }, ref) {
     const { channelTwitchId, ready } = useSelectedChannel();
     const [layouts, setLayouts] = React.useState<Layouts>(() =>
       normalizeDashboardLayouts(defaultDashboardLayouts())
@@ -391,6 +533,7 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
     );
     const lastPersistedVisibleRef = React.useRef<DockKey[]>([...DASHBOARD_DEFAULT_VISIBLE]);
     const lastPersistedDockLocksRef = React.useRef<string>("{}");
+    const lastPersistedFillRowGapsRef = React.useRef<boolean>(false);
     const baselineForChannelRef = React.useRef<string | null>(null);
 
     /**
@@ -523,7 +666,12 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
         .then((r) => (r.ok ? r.json() : null))
         .then((json) => {
           const layout = json?.layout as
-            | { layoutsJson: string; visibleJson: string; docksLockedJson?: string }
+            | {
+                layoutsJson: string;
+                visibleJson: string;
+                docksLockedJson?: string;
+                fillDashboardRowGaps?: boolean;
+              }
             | null
             | undefined;
           if (!layout) return;
@@ -535,13 +683,14 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
             }
             setVisible(nextVisible);
             setDockLocks(parseDockLocksJson(layout.docksLockedJson));
+            onFillRowGapsChange(Boolean(layout.fillDashboardRowGaps));
           } catch {
             // ignore malformed DB row
           }
         })
         .catch(() => {})
         .finally(() => setPersistEnabled(true));
-    }, [ready, channelTwitchId]);
+    }, [ready, channelTwitchId, onFillRowGapsChange]);
 
     React.useLayoutEffect(() => {
       if (!persistEnabled || !channelTwitchId || !ready) return;
@@ -550,8 +699,9 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
         lastPersistedLayoutsRef.current = cloneLayouts(layouts);
         lastPersistedVisibleRef.current = [...visible];
         lastPersistedDockLocksRef.current = dockLocksCanonicalJson(dockLocks);
+        lastPersistedFillRowGapsRef.current = fillRowGaps;
       }
-    }, [persistEnabled, channelTwitchId, ready, layouts, visible, dockLocks]);
+    }, [persistEnabled, channelTwitchId, ready, layouts, visible, dockLocks, fillRowGaps]);
 
     const persistToServer = React.useCallback(
       async (payload: Record<string, unknown>) => {
@@ -581,6 +731,9 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
         if (typeof payload.docksLockedJson === "string") {
           lastPersistedDockLocksRef.current = payload.docksLockedJson;
         }
+        if (typeof payload.fillDashboardRowGaps === "boolean") {
+          lastPersistedFillRowGapsRef.current = payload.fillDashboardRowGaps;
+        }
       },
       [channelTwitchId]
     );
@@ -594,6 +747,7 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
         const visChanged = JSON.stringify(visible) !== JSON.stringify(lastPersistedVisibleRef.current);
         const lockJson = dockLocksCanonicalJson(dockLocks);
         const lockChanged = lockJson !== lastPersistedDockLocksRef.current;
+        const fillChanged = fillRowGaps !== lastPersistedFillRowGapsRef.current;
 
         const body: Record<string, unknown> = {};
         // Patch JSON is per-breakpoint and intentionally unwrapped (the server merges into the
@@ -601,13 +755,14 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
         if (Object.keys(patch).length) body.layoutsPatchJson = JSON.stringify(patch);
         if (visChanged) body.visibleJson = JSON.stringify(visible);
         if (lockChanged) body.docksLockedJson = lockJson;
+        if (fillChanged) body.fillDashboardRowGaps = fillRowGaps;
 
         if (Object.keys(body).length === 0) return;
         void persistToServer(body);
       }, 600);
 
       return () => window.clearTimeout(t);
-    }, [persistEnabled, ready, channelTwitchId, layouts, visible, dockLocks, persistToServer]);
+    }, [persistEnabled, ready, channelTwitchId, layouts, visible, dockLocks, fillRowGaps, persistToServer]);
 
     React.useImperativeHandle(
       ref,
@@ -644,12 +799,10 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
      * at a tiny size, which is what made docks "EXTREMELY small and i cant see them". Always
      * resetting to `DEFAULT_DOCK_W × meta.h` on menu-add makes the experience predictable.
      *
-     * Placement: appended below every other dock (maxY + 1) and resolved through
-     * `applyIntruderShrink` so callers passing explicit `opts.x/y` can drop the dock anywhere
-     * without risking overlap. After the commit we smooth-scroll to the bottom of the page over
-     * two `requestAnimationFrame` ticks — that way the scroll runs *after* React has laid out the
-     * new row, so `documentElement.scrollHeight` reflects the grown grid rather than the stale
-     * pre-add height.
+     * Placement: first free slot that fits `DEFAULT_DOCK_W × meta.h` (scanning top-to-bottom), then
+     * `applyIntruderShrink` so neighbours shrink/shift. Explicit `opts.x/y` from drag-drop still wins.
+     * After the commit we smooth-scroll to the bottom of the page over two `requestAnimationFrame`
+     * ticks so `documentElement.scrollHeight` reflects the grown grid.
      */
     function addDock(key: DockKey, opts?: { x?: number; y?: number; w?: number; h?: number }) {
       setVisible((v) => (v.includes(key) ? v : [...v, key]));
@@ -661,12 +814,24 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
         const base = ((prev.lg ?? []) as Layout[])
           .filter((l) => l.i !== key)
           .map(sanitizeLayoutItem);
-        const maxY = base.reduce((m, l) => Math.max(m, l.y + l.h), 0);
-        const x = opts?.x ?? 0;
-        const y = opts?.y ?? maxY + 1;
-        const intruder: Layout = { i: key, x, y, w, h, minW: meta.minW, minH: meta.minH };
+        const origin =
+          opts?.x != null && opts?.y != null
+            ? { x: opts.x, y: opts.y }
+            : pickAddDockOrigin(base, w, h, GRID_COLS);
+        const intruder: Layout = {
+          i: key,
+          x: origin.x,
+          y: origin.y,
+          w,
+          h,
+          minW: meta.minW,
+          minH: meta.minH
+        };
         const next = applyIntruderShrink(base, intruder, GRID_COLS, lockedIds);
-        return replicateLayoutToAllBreakpoints(next);
+        const filled = fillRowGaps
+          ? expandLayoutFillGaps(packLayoutEdgeToEdge(next, lockedIds), GRID_COLS, lockedIds)
+          : next;
+        return replicateLayoutToAllBreakpoints(filled);
       });
       setDockMenuOpen(false);
 
@@ -684,7 +849,20 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
       setVisible((v) => v.filter((x) => x !== key));
     }
 
-    const hidden = DOCKS.filter((d) => !visible.includes(d.key));
+    /**
+     * Master dock list for the "Add Dock" panel — every dock is rendered every time, with a
+     * solid purple ball when it's currently on the dashboard and an empty purple ring when it
+     * isn't. Clicking the row toggles its visibility. The drag affordance is only enabled for
+     * hidden docks so the user can still drop them at a specific grid cell.
+     */
+    const dockMenuItems = React.useMemo(
+      () =>
+        DOCKS.map((d) => ({
+          ...d,
+          isVisible: visible.includes(d.key)
+        })),
+      [visible]
+    );
 
     const layoutsForGrid = React.useMemo(
       () => applyDockLocks(layouts, dockLocks),
@@ -705,6 +883,33 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
       () => new Set(Object.keys(dockLocks).filter((k) => dockLocks[k as DockKey])),
       [dockLocks]
     );
+
+    /**
+     * "Fill dashboard row gaps" toggle → instant snap-to-grid.
+     *
+     * When the toggle flips from off to on we run `packLayoutEdgeToEdge` against the current
+     * layout, replicate the result across breakpoints, and let the existing persist effect
+     * push the new layout to the DB. RGL's `compactType="vertical"` keeps vertical packing
+     * working continuously while the toggle stays on; horizontal compaction is a one-shot at
+     * toggle time because dragging items apart is a legitimate user action we don't want to
+     * fight on every gesture.
+     *
+     * We track the previous toggle value in a ref so the effect only fires on the off→on edge,
+     * not on every layout change while the toggle is already on (which would mean fighting the
+     * user's drags or recomputing every time `lockedIds` changes).
+     */
+    const prevFillRowGapsRef = React.useRef<boolean>(fillRowGaps);
+    React.useEffect(() => {
+      const wasOff = prevFillRowGapsRef.current === false;
+      prevFillRowGapsRef.current = fillRowGaps;
+      if (!wasOff || !fillRowGaps) return;
+      setLayouts((prev) => {
+        const lg = ((prev.lg ?? []) as Layout[]).map(sanitizeLayoutItem);
+        const packed = packLayoutEdgeToEdge(lg, lockedIds);
+        const expanded = expandLayoutFillGaps(packed, GRID_COLS, lockedIds);
+        return replicateLayoutToAllBreakpoints(expanded);
+      });
+    }, [fillRowGaps, lockedIds]);
 
     /**
      * Shared drag/resize reducer.
@@ -734,10 +939,14 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
           dragOriginalLayoutRef.current ??
           ((layouts.lg ?? []) as Layout[]).map(sanitizeLayoutItem);
         const intruder = sanitizeLayoutItem(newItem);
-        const next = applyIntruderShrink(base, intruder, GRID_COLS, lockedIds);
+        let next = applyIntruderShrink(base, intruder, GRID_COLS, lockedIds);
+
+        if (commit && fillRowGaps) {
+          next = expandLayoutFillGaps(packLayoutEdgeToEdge(next, lockedIds), GRID_COLS, lockedIds);
+        }
 
         // Compute which non-intruder docks changed compared to the snapshot — they're the
-        // ones the user should see highlighted.
+        // ones the user should see highlighted (faded body).
         const adjusted = new Set<string>();
         for (const cur of next) {
           if (cur.i === intruder.i) continue;
@@ -779,7 +988,7 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
         setLayouts((prev) => ({ ...prev, lg: inflight }));
         setProjectedLayout(next);
       },
-      [layouts, lockedIds]
+      [layouts, lockedIds, fillRowGaps]
     );
 
     const handleInteractionStart = React.useCallback(() => {
@@ -907,7 +1116,21 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
      * Constants below must match the `<ResponsiveGridLayout>` props (margin/rowHeight/cols).
      */
     const projectedOutlines = React.useMemo(() => {
-      if (!projectedLayout || shrinkingIds.size === 0) return null;
+      if (!projectedLayout) return null;
+      const baseSnap = dragOriginalLayoutRef.current;
+      if (!baseSnap) return null;
+
+      const changed = projectedLayout.filter((pl) => {
+        const orig = baseSnap.find((b) => b.i === pl.i);
+        return (
+          !orig ||
+          orig.x !== pl.x ||
+          orig.y !== pl.y ||
+          orig.w !== pl.w ||
+          orig.h !== pl.h
+        );
+      });
+      if (changed.length === 0) return null;
 
       const marginX = 4;
       const marginY = 8;
@@ -915,67 +1138,95 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
       const totalGapPx = marginX * (GRID_COLS - 1);
       const colWidthExpr = `((100% - ${totalGapPx}px) / ${GRID_COLS})`;
 
-      return projectedLayout
-        .filter((item) => shrinkingIds.has(String(item.i)))
-        .map((item) => {
-          const xGap = item.x * marginX;
-          const wGap = Math.max(0, item.w - 1) * marginX;
-          const left = `calc(${item.x} * ${colWidthExpr} + ${xGap}px)`;
-          const width = `calc(${item.w} * ${colWidthExpr} + ${wGap}px)`;
-          const top = item.y * (rowHeight + marginY);
-          const height = item.h * rowHeight + Math.max(0, item.h - 1) * marginY;
-          return { id: String(item.i), left, top, width, height };
-        });
-    }, [projectedLayout, shrinkingIds]);
+      return changed.map((item) => {
+        const xGap = item.x * marginX;
+        const wGap = Math.max(0, item.w - 1) * marginX;
+        const left = `calc(${item.x} * ${colWidthExpr} + ${xGap}px)`;
+        const width = `calc(${item.w} * ${colWidthExpr} + ${wGap}px)`;
+        const top = item.y * (rowHeight + marginY);
+        const height = item.h * rowHeight + Math.max(0, item.h - 1) * marginY;
+        return { id: String(item.i), left, top, width, height };
+      });
+    }, [projectedLayout]);
+
+    const [dockMenuHost, setDockMenuHost] = React.useState<HTMLElement | null>(null);
+    React.useLayoutEffect(() => {
+      setDockMenuHost(document.getElementById("sv-dashboard-dock-menu-anchor"));
+    }, [dockMenuOpen]);
+
+    const dockMenuPanel =
+      dockMenuOpen ? (
+        <div className="pointer-events-auto w-[340px] overflow-hidden rounded-lg border border-white/10 bg-black/20 shadow-2xl shadow-black/50 backdrop-blur-xl ring-1 ring-white/[0.08]">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-black/40 px-4 py-3 backdrop-blur-md">
+            <div className="text-sm font-semibold text-white">Add Dock</div>
+            <button
+              type="button"
+              className="text-xs text-white/60 hover:text-white"
+              onClick={() => setDockMenuOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="max-h-[min(70vh,520px)] overflow-y-auto p-2">
+            <div className="px-3 pb-2 text-xs text-white/55">
+              Toggle a dock on or off, or drag a hidden dock into the grid for precise placement.
+            </div>
+            <div className="space-y-1">
+              {dockMenuItems.map((d) => (
+                <div
+                  key={d.key}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-sm transition",
+                    "text-white/80 hover:bg-white/[0.05] hover:text-white"
+                  )}
+                >
+                  <div
+                    draggable={!d.isVisible}
+                    onDragStart={(e) => {
+                      if (d.isVisible) {
+                        e.preventDefault();
+                        return;
+                      }
+                      e.dataTransfer.setData("application/x-streamcore-dock", d.key);
+                      e.dataTransfer.effectAllowed = "copy";
+                    }}
+                    className={cn(
+                      "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5",
+                      d.isVisible ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+                    )}
+                    title={d.isVisible ? "On dashboard — toggle off to hide" : "Drag into the grid"}
+                  >
+                    <span className="truncate font-medium">{d.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={d.isVisible}
+                    draggable={false}
+                    onClick={() => (d.isVisible ? hideDock(d.key) : addDock(d.key))}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/35 bg-black/30 transition hover:border-primary/60 hover:bg-primary/10"
+                    title={d.isVisible ? "Hide dock" : "Show dock"}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "rounded-full border-2 transition-all duration-200 ease-out",
+                        d.isVisible
+                          ? "h-4 w-4 border-primary bg-primary shadow-[0_0_12px_rgba(168,85,247,0.75)]"
+                          : "h-4 w-4 border-primary bg-transparent shadow-none"
+                      )}
+                    />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null;
 
     return (
       <div className="relative">
-        {dockMenuOpen ? (
-          <div className="absolute right-4 top-4 z-50 w-[320px] overflow-hidden rounded-lg border border-white/10 bg-black/60 backdrop-blur">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <div className="text-sm font-semibold text-white">Add Dock</div>
-              <button
-                className="text-xs text-white/60 hover:text-white"
-                onClick={() => setDockMenuOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="p-2">
-              <div className="px-3 pb-2 text-xs text-white/55">
-                Drag a dock into the grid, or click to add.
-              </div>
-              {hidden.length ? (
-                <div className="space-y-1">
-                  {hidden.map((d) => (
-                    <button
-                      key={d.key}
-                      onClick={() => addDock(d.key)}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData("application/x-streamcore-dock", d.key);
-                        e.dataTransfer.effectAllowed = "copy";
-                      }}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-md px-3 py-2 text-sm",
-                        "text-white/75 hover:bg-white/[0.05] hover:text-white"
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        <GripVertical className="h-4 w-4 text-white/40" />
-                        {d.name}
-                      </span>
-                      <Plus className="h-4 w-4 text-primary" />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="px-3 py-6 text-sm text-white/60">All docks are already visible.</div>
-              )}
-            </div>
-          </div>
-        ) : null}
-
+        {dockMenuHost && dockMenuPanel ? createPortal(dockMenuPanel, dockMenuHost) : null}
         <div className={cn("w-full px-3 py-6 sm:px-6")}>
           {/**
            * Grid behaviour summary:
@@ -988,30 +1239,34 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
            *   - `onDragStop` / `onResizeStop` / `onDrop` all funnel through `applyIntruderShrink`
            *     so the underlying dock(s) shrink toward the side where the intruder landed
            *     instead of being shoved across the grid.
+           *
+           * `allowOverlap` is bound to `!fillRowGaps`: when fill mode is ON the grid is strictly
+           * non-overlapping (the user asked for "push, not overlap"), and when it's OFF we let
+           * the in-flight drag freely overlap so the fluid resolver can render its split-state
+           * preview (intruder follows cursor, neighbours fade in place). The committed layout
+           * is overlap-free either way because `applyIntruderShrink` only writes non-overlapping
+           * results.
            */}
           <div className="relative">
           <ResponsiveGridLayout
             className="layout"
             layouts={layoutsForGrid}
             breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-            // v3 grid: 128 cols horizontally with a 4px x-margin pushes the horizontal snap step
-            // to ≈12px on a typical desktop dashboard width (~1600px), which lines up with the
-            // visible 12px page-background grid. Vertical rowHeight stays at 15px (+ 8px margin)
-            // so dock heights don't visually compress on the upgrade.
-            cols={{ lg: 128, md: 128, sm: 128, xs: 128, xxs: 128 }}
+            // v4 grid: 12 OBS-style columns; 4px horizontal margin matches the fine snap feel.
+            cols={{ lg: 12, md: 12, sm: 12, xs: 12, xxs: 12 }}
             rowHeight={15}
             margin={[4, 8]}
             containerPadding={[0, 0]}
             draggableHandle=".sv-drag-handle"
-            draggableCancel="button, input, textarea, select, a, [role='combobox'], [data-rgl-no-drag]"
+            draggableCancel="button, input, textarea, select, a, iframe, [role='combobox'], [data-rgl-no-drag]"
             // All 8 handles enabled — sides cover their full edge (see globals.css), corners
             // overlap on top with diagonal cursors for free 2D resize.
             resizeHandles={["s", "n", "w", "e", "sw", "se", "nw", "ne"]}
             isResizable
             isDraggable
-            compactType={null}
+            compactType={fillRowGaps ? "vertical" : null}
             preventCollision={false}
-            allowOverlap
+            allowOverlap={!fillRowGaps}
             onDragStart={handleDragStart}
             onDrag={(_layout, _oldItem, newItem) => applyIntruder(newItem as Layout, false)}
             onDragStop={handleDragStop}
@@ -1041,7 +1296,10 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
                 const base = ((prev.lg ?? []) as Layout[])
                   .filter((l) => l.i !== key)
                   .map(sanitizeLayoutItem);
-                const next = applyIntruderShrink(base, intruder, GRID_COLS, lockedIds);
+                let next = applyIntruderShrink(base, intruder, GRID_COLS, lockedIds);
+                if (fillRowGaps) {
+                  next = expandLayoutFillGaps(packLayoutEdgeToEdge(next, lockedIds), GRID_COLS, lockedIds);
+                }
                 return replicateLayoutToAllBreakpoints(next);
               });
               setDockMenuOpen(false);
@@ -1057,11 +1315,20 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
               </div>
             ) : null}
             {visible.includes("liveChat") ? (
-              <div key="liveChat" className={shrinkClass("liveChat")}>
+              <div key="liveChat" className={cn(shrinkClass("liveChat"), "sv-grid-iframe-dock")}>
                 <LiveChatDock
                   onClose={() => hideDock("liveChat")}
                   dockLocked={Boolean(dockLocks.liveChat)}
                   onToggleDockLock={() => toggleDockLock("liveChat")}
+                />
+              </div>
+            ) : null}
+            {visible.includes("rewardsQueue") ? (
+              <div key="rewardsQueue" className={shrinkClass("rewardsQueue")}>
+                <RewardsQueueDock
+                  onClose={() => hideDock("rewardsQueue")}
+                  dockLocked={Boolean(dockLocks.rewardsQueue)}
+                  onToggleDockLock={() => toggleDockLock("rewardsQueue")}
                 />
               </div>
             ) : null}

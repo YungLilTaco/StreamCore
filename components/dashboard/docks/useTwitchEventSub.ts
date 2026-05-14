@@ -86,6 +86,17 @@ function parseStoredRow(raw: unknown): ActivityFeedItemDTO | null {
   if (!ACTIVITY_FEED_KIND_KEYS.includes(kind)) return null;
   const optionalStr = (k: string): string | undefined =>
     typeof row[k] === "string" ? (row[k] as string) : undefined;
+  const rawCp = row.channelPointsRedemption;
+  let channelPointsRedemption: ActivityFeedItemDTO["channelPointsRedemption"];
+  if (rawCp && typeof rawCp === "object") {
+    const o = rawCp as Record<string, unknown>;
+    const rewardId = typeof o.rewardId === "string" ? o.rewardId : "";
+    const redemptionId = typeof o.redemptionId === "string" ? o.redemptionId : "";
+    const userInput = typeof o.userInput === "string" ? o.userInput : "";
+    if (rewardId && redemptionId) {
+      channelPointsRedemption = { rewardId, redemptionId, userInput };
+    }
+  }
   return {
     id,
     kind,
@@ -96,7 +107,8 @@ function parseStoredRow(raw: unknown): ActivityFeedItemDTO | null {
     actorDisplayName: optionalStr("actorDisplayName"),
     targetLogin: optionalStr("targetLogin"),
     targetTwitchId: optionalStr("targetTwitchId"),
-    targetDisplayName: optionalStr("targetDisplayName")
+    targetDisplayName: optionalStr("targetDisplayName"),
+    channelPointsRedemption
   };
 }
 

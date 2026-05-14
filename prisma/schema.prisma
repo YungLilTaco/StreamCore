@@ -25,6 +25,9 @@ model User {
   channelPerms  ChannelPermission[]
   invitesCreated PermissionInvite[] @relation("PermissionInviteCreatedBy")
   dashboardLayouts DashboardLayout[]
+  songRequestConfigs SongRequestConfig[]
+  botCommands      BotCommand[]
+  botSettings      BotSettings[]
 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -38,6 +41,8 @@ model DashboardLayout {
   visibleJson     String
   /** JSON: Partial<Record<dockKey, boolean>> — true = dock locked (not draggable/resizable) */
   docksLockedJson String   @default("{}")
+  /** Pack docks vertically (react-grid-layout compact) for edge-to-edge rows with fewer gaps. */
+  fillDashboardRowGaps Boolean @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -194,5 +199,96 @@ model PermissionInvite {
 
   @@index([channelTwitchId])
   @@index([token])
+}
+
+/**
+ * Per-channel song request settings (queue rules + optional Channel Points reward id).
+ * One row per broadcaster channel the user owns.
+ */
+model SongRequestConfig {
+  id                    String   @id @default(cuid())
+  userId                String
+  channelTwitchId       String   @unique
+  allowEveryone         Boolean  @default(true)
+  subsOnly              Boolean  @default(false)
+  vipsOnly              Boolean  @default(false)
+  modsOnly              Boolean  @default(false)
+  /** Same role-gate pattern as song requests, applied to the built-in `!volume` command only. */
+  volumeAllowEveryone   Boolean  @default(true)
+  volumeSubsOnly        Boolean  @default(false)
+  volumeVipsOnly        Boolean  @default(false)
+  volumeModsOnly        Boolean  @default(false)
+  /** Twitch custom reward id for song requests (Helix). */
+  channelPointsRewardId String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SongRequestQueueItem {
+  id                 String   @id @default(cuid())
+  channelTwitchId    String
+  title              String
+  artist             String
+  spotifyUri         String
+  requestedByLogin   String
+  createdAt          DateTime @default(now())
+
+  @@index([channelTwitchId, createdAt])
+}
+
+/**
+ * Per-broadcaster bot command definitions (StreamCoreHelper).
+ *
+ * `response` is a chat-message template that supports inline variables resolved by the bot
+ * runtime at trigger time: ${user}, ${target}, ${random:min-max}, ${streamer}.
+ */
+model BotCommand {
+  id              String   @id @default(cuid())
+  userId          String
+  channelTwitchId String
+  trigger         String
+  response        String
+  enabled         Boolean  @default(true)
+  cooldownSec     Int      @default(5)
+  modOnly         Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelTwitchId, trigger])
+  @@index([userId])
+  @@index([channelTwitchId])
+}
+
+/**
+ * Per-broadcaster bot runtime settings (one row per channel).
+ *
+ * `prefix` is the trigger prefix the bot listens for (default `!`). `enabled` is the master
+ * on/off switch for the channel.
+ */
+model BotSettings {
+  id              String   @id @default(cuid())
+  userId          String
+  channelTwitchId String   @unique
+  enabled         Boolean  @default(true)
+  prefix          String   @default("!")
+  /**
+   * When false (default), command and greeting lines are prefixed with `StreamCoreHelper · ` before sending.
+   * When true, lines are sent raw (still via your Twitch IRC session) so they read like normal broadcaster chat.
+   */
+  prefixRepliesAsHelper Boolean @default(false)
+  greetingEnabled Boolean  @default(false)
+  greetingMessage String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 

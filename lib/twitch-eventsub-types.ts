@@ -169,6 +169,7 @@ export function eventSubPayloadToActivityRow(
   let targetLogin: string | undefined;
   let targetTwitchId: string | undefined;
   let targetDisplayName: string | undefined;
+  let channelPointsRedemption: ActivityFeedItemDTO["channelPointsRedemption"];
 
   /** Pull `user_*` triplet (id/login/name) into the actor slot. */
   const captureActorFromUser = () => {
@@ -224,10 +225,16 @@ export function eventSubPayloadToActivityRow(
     case "channel.channel_points_custom_reward_redemption.add": {
       kind = "channel_points_redeem";
       captureActorFromUser();
-      const reward = e.reward as { title?: string; cost?: number } | undefined;
+      const reward = e.reward as { id?: string; title?: string; cost?: number } | undefined;
       const title = reward?.title ?? "Channel Points";
       const cost = reward?.cost;
       text = `${actorDisplayName || actorLogin || "Someone"}: ${title}${typeof cost === "number" ? ` (${cost} pts)` : ""}`;
+      const rewardId = reward?.id || str("reward_id");
+      const redemptionId = str("id");
+      const userInput = str("user_input");
+      if (rewardId && redemptionId) {
+        channelPointsRedemption = { rewardId, redemptionId, userInput };
+      }
       break;
     }
     case "channel.poll.begin":
@@ -298,6 +305,7 @@ export function eventSubPayloadToActivityRow(
     actorDisplayName,
     targetLogin,
     targetTwitchId,
-    targetDisplayName
+    targetDisplayName,
+    channelPointsRedemption
   };
 }

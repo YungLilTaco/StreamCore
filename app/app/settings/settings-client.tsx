@@ -1,12 +1,30 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { setOauthLinkIntent } from "@/lib/oauth-link-intent";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Music2, Twitch, ShieldCheck } from "lucide-react";
 
 type Account = { provider: string; scope: string | null; expires_at: number | null };
 type Consent = { id: string; provider: string; scopes: string; grantedAt: Date };
+
+/** Fixed locale + UTC so SSR and the browser produce the same string (avoids hydration mismatch). */
+function formatConsentGrantedAt(grantedAt: Date | string): string {
+  const d = new Date(grantedAt);
+  return (
+    new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+      timeZone: "UTC"
+    }).format(d) + " UTC"
+  );
+}
 
 const twitchScopes = [
   "openid",
@@ -18,6 +36,7 @@ const twitchScopes = [
   "channel:read:subscriptions",
   "bits:read",
   "channel:read:redemptions",
+  "channel:manage:redemptions",
   "moderator:manage:shoutouts",
   "channel:read:polls",
   "channel:read:predictions",
@@ -28,9 +47,12 @@ const twitchScopes = [
 ];
 
 const spotifyScopes = [
+  "user-read-email",
   "user-read-currently-playing",
   "user-modify-playback-state",
-  "user-read-playback-state"
+  "user-read-playback-state",
+  "user-library-read",
+  "user-library-modify"
 ];
 
 export function SettingsClient({
@@ -106,7 +128,10 @@ export function SettingsClient({
           <Button
             variant="primary"
             className="shadow-glow-purple"
-            onClick={() => signIn("spotify", { callbackUrl: "/app/settings" })}
+            onClick={() => {
+              setOauthLinkIntent("spotify", "/app/settings");
+              void signIn("spotify", { callbackUrl: "/app/settings" });
+            }}
           >
             {hasSpotify ? "Re-link Spotify" : "Link Spotify"}
           </Button>
@@ -131,7 +156,7 @@ export function SettingsClient({
                 <div className="text-sm text-white/80">
                   <span className="font-semibold text-white">{c.provider}</span>{" "}
                   <span className="text-white/50">•</span>{" "}
-                  <span className="text-white/70">{new Date(c.grantedAt).toLocaleString()}</span>
+                  <span className="text-white/70">{formatConsentGrantedAt(c.grantedAt)}</span>
                 </div>
                 <div className="max-w-full truncate font-mono text-[12px] text-white/60 md:max-w-[65%]">
                   {c.scopes || "(no scopes returned)"}

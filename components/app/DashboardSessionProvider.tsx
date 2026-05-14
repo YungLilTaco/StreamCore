@@ -3,15 +3,13 @@
 /**
  * Dashboard-scoped state container.
  *
- * Lifts two pieces of state out of individual docks so the user profile popover (which can be
- * triggered from chat OR activity feed) can read them without re-mounting the WebSocket:
+ * Lifts state out of individual docks so shared consumers (popover, bot engine) stay wired
+ * without re-mounting sockets:
  *
- *   1. Twitch IRC chat — owned here, consumed by `LiveChatDock` and any popover. Means the WS
- *      stays alive even if the user removes the chat dock from the grid (cheap to keep open,
- *      keeps the popover's "Messages" tab populated either way).
- *   2. Per-user moderation actions performed during this dashboard session — Twitch does not
- *      expose a "get my moderation history" API, so warnings / timeouts / bans visible in the
- *      popover are necessarily session-local. Records are namespaced by lowercase login.
+ *   1. Twitch IRC chat — owned here (`useTwitchChat`).
+ *   2. Twitch EventSub live buffer — owned here (`useTwitchEventSub`) so channel-point redemptions
+ *      (song requests) still arrive when the Activity Feed dock is hidden.
+ *   3. Per-user moderation actions — session-local log for the popover.
  *
  * Mount once at the top of the dashboard route (`/app/dashboard/page.tsx`).
  */
@@ -23,6 +21,8 @@ import {
   type ChatMessage,
   type ChatStatus
 } from "@/components/dashboard/docks/useTwitchChat";
+import { useTwitchEventSub } from "@/components/dashboard/docks/useTwitchEventSub";
+import type { ActivityFeedItemDTO } from "@/lib/twitch-activity-feed-model";
 
 export type ModActionType = "ban" | "timeout" | "unban" | "warn";
 
@@ -40,6 +40,8 @@ type DashboardSessionCtx = {
   chatStatus: ChatStatus;
   chatMessages: ChatMessage[];
   chatSend: (text: string) => boolean;
+  /** EventSub-derived rows (same shape as the activity feed). Always mounted on the live dashboard. */
+  eventSubLiveEvents: ActivityFeedItemDTO[];
   /** Append an action to the session log for the given login (case-insensitive). */
   recordAction: (login: string, action: Omit<ModAction, "id" | "ts"> & { ts?: number }) => void;
   /** Session-local action log for the given login, most recent first. */
@@ -62,9 +64,18 @@ export function useMaybeDashboardSession(): DashboardSessionCtx | null {
 const ACTIONS_PER_USER_CAP = 100;
 
 export function DashboardSessionProvider({ children }: { children: React.ReactNode }) {
-  const { channelTwitchId, ready } = useSelectedChannel();
+  const { channelTwitchId, ready, channels } = useSelectedChannel();
+  const isSelfChannel = Boolean(
+    channelTwitchId && channels.some((c) => c.channelTwitchId === channelTwitchId && c.isSelf)
+  );
+
   const { status, messages, send } = useTwitchChat({
     enabled: ready && !!channelTwitchId,
+    channelTwitchId
+  });
+
+  const { liveEvents: eventSubLiveEvents } = useTwitchEventSub({
+    enabled: ready && !!channelTwitchId && isSelfChannel,
     channelTwitchId
   });
 
@@ -95,10 +106,11 @@ export function DashboardSessionProvider({ children }: { children: React.ReactNo
       chatStatus: status,
       chatMessages: messages,
       chatSend: send,
+      eventSubLiveEvents,
       recordAction,
       actionsFor
     }),
-    [status, messages, send, recordAction, actionsFor]
+    [status, messages, send, eventSubLiveEvents, recordAction, actionsFor]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -44,6 +44,15 @@ export type ActivityFeedItemDTO = {
   targetLogin?: string;
   targetTwitchId?: string;
   targetDisplayName?: string;
+  /**
+   * EventSub `channel.channel_points_custom_reward_redemption.add` only — lets the dashboard bot
+   * correlate redemptions with Song Request settings without parsing `text`.
+   */
+  channelPointsRedemption?: {
+    rewardId: string;
+    redemptionId: string;
+    userInput: string;
+  };
 };
 
 export const ACTIVITY_FEED_KIND_LABELS: Record<ActivityFeedEventKind, string> = {

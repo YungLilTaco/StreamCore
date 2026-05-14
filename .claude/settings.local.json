@@ -3,7 +3,18 @@
     "allow": [
       "Bash(npm run *)",
       "Bash(npm view *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(curl -sS http://127.0.0.1:3000/api/debug/auth)",
+      "Bash(curl -sS -m 10 https://id.twitch.tv/oauth2/.well-known/openid-configuration)",
+      "Bash(npx tsc *)",
+      "Bash(npx prisma *)",
+      "Bash(node d:/Streamvault/scripts/sync-prisma-migration-checksums.mjs)",
+      "Bash(node scripts/prisma-env.mjs db execute --file scripts/sync-migration-checksums.sql --schema prisma/schema.prisma)",
+      "Bash(node scripts/prisma-env.mjs migrate dev)",
+      "Bash(xargs grep -l 'Unhandled')",
+      "Bash(grep -o 'Unhandled[^\"]\\\\{0,40\\\\}' d:/Streamvault/node_modules/next/dist/client/components/app-router.js)",
+      "Bash(grep -o 'Unhandled[^\"]\\\\{0,40\\\\}' d:/Streamvault/node_modules/next/dist/client/dev/hot-reloader/app/hot-reloader-app.js)",
+      "Bash(grep -o 'Unhandled[^\"]\\\\{0,80\\\\}' d:/Streamvault/node_modules/next/dist/compiled/next-devtools/index.js)"
     ]
   }
 }

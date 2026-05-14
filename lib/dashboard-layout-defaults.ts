@@ -3,6 +3,7 @@ import type { Layout, Layouts } from "react-grid-layout";
 export type DashboardDockKey =
   | "streamPreview"
   | "liveChat"
+  | "rewardsQueue"
   | "activityFeed"
   | "quickActions"
   | "quickClip"
@@ -10,38 +11,40 @@ export type DashboardDockKey =
   | "soundMixer"
   | "streamInfo";
 
+/** Horizontal columns for the live dashboard (OBS-style 12-wide grid). */
+export const DASHBOARD_GRID_COLS = 12 as const;
+
 /**
  * Grid resolution version.
  *
  * v1 = 16 cols,  rowHeight 30, margin 14   (initial layout)
  * v2 = 32 cols,  rowHeight 15, margin 8    (2× horizontal density)
- * v3 = 128 cols, rowHeight 15, margin [4, 8] (4× horizontal density — snap matches the visible
- *      12px page-background grid on typical desktop widths; vertical step unchanged so existing
- *      heights migrate 1:1.)
+ * v3 = 128 cols, rowHeight 15, margin [4, 8] (4× horizontal density)
+ * v4 = 12 cols,  rowHeight 15, margin [4, 8] (OBS-style twelve-column grid; migrated from v3)
  *
  * `DashboardGrid` reads layouts saved by older clients as v1/v2 and rescales them via
- * `migrateLayoutsV1ToV2` / `migrateLayoutsV2ToV3` before handing them to `ResponsiveGridLayout`.
- * New writes are persisted with the `{ __v: 3, layouts }` envelope (see `serializeLayouts`).
+ * `migrateLayoutsV1ToV2` / `migrateLayoutsV2ToV3` / `migrateLayoutsV3ToV4` before handing them to
+ * `ResponsiveGridLayout`. New writes use `{ __v: 4, layouts }` (see `serializeLayouts`).
  */
-export const DASHBOARD_LAYOUT_VERSION = 3 as const;
+export const DASHBOARD_LAYOUT_VERSION = 4 as const;
 
 /**
  * Grid row heights use DashboardGrid `rowHeight` + vertical `margin` (see app).
- * These min/default `h` and `minW` values are tuned for the v3 grid (128 cols × 15px rowHeight)
- * so each dock's typical UI fits without clipping.
+ * These min/default `h` and `minW` values are tuned for the v4 grid (12 cols × 15px rowHeight).
  */
 export const DOCK_GRID_METRICS: Record<
   DashboardDockKey,
   { minH: number; h: number; minW: number }
 > = {
-  streamPreview: { minH: 14, h: 14, minW: 32 },
-  liveChat: { minH: 12, h: 12, minW: 32 },
-  activityFeed: { minH: 12, h: 12, minW: 24 },
-  quickActions: { minH: 12, h: 12, minW: 32 },
-  quickClip: { minH: 8, h: 8, minW: 24 },
-  spotifyBridge: { minH: 14, h: 14, minW: 32 },
-  soundMixer: { minH: 9, h: 22, minW: 14 },
-  streamInfo: { minH: 22, h: 22, minW: 32 }
+  streamPreview: { minH: 14, h: 14, minW: 3 },
+  liveChat: { minH: 12, h: 12, minW: 3 },
+  rewardsQueue: { minH: 10, h: 12, minW: 3 },
+  activityFeed: { minH: 12, h: 12, minW: 2 },
+  quickActions: { minH: 12, h: 12, minW: 3 },
+  quickClip: { minH: 8, h: 8, minW: 2 },
+  spotifyBridge: { minH: 16, h: 18, minW: 3 },
+  soundMixer: { minH: 9, h: 22, minW: 2 },
+  streamInfo: { minH: 22, h: 22, minW: 3 }
 };
 
 export const DASHBOARD_DEFAULT_VISIBLE: DashboardDockKey[] = [
@@ -57,6 +60,7 @@ export type DockLocksState = Partial<Record<DashboardDockKey, boolean>>;
 const DOCK_KEY_SET = new Set<string>([
   "streamPreview",
   "liveChat",
+  "rewardsQueue",
   "activityFeed",
   "quickActions",
   "quickClip",
@@ -115,7 +119,9 @@ export function normalizeDashboardLayoutItem(item: Layout): Layout {
   const minH = meta.minH;
   const minW = meta.minW;
   const h = Math.max(item.h, minH);
-  return { ...item, minH, minW, h };
+  /** Live chat iframe only: no resize handles so RGL does not stack invisible hit targets above the embed (Twitch disables mod chat when “obscured”). */
+  const iframeDock = id === "liveChat";
+  return { ...item, minH, minW, h, ...(iframeDock ? { isResizable: false } : {}) };
 }
 
 const LAYOUT_BP_KEYS: (keyof Layouts)[] = ["lg", "md", "sm", "xs", "xxs"];
@@ -145,12 +151,11 @@ export function replicateLayoutToAllBreakpoints(layout: Layout[]): Layouts {
 }
 
 export function defaultDashboardLayouts(): Layouts {
-  // v3 grid is 128 cols wide — defaults below take the full width by spanning 48/48/32 across.
   const lg: Layout[] = [
-    { i: "streamPreview", x: 0, y: 0, w: 48, ...m("streamPreview") },
-    { i: "liveChat", x: 48, y: 0, w: 48, ...m("liveChat") },
-    { i: "activityFeed", x: 96, y: 0, w: 32, ...m("activityFeed") },
-    { i: "quickActions", x: 0, y: 14, w: 64, ...m("quickActions") }
+    { i: "streamPreview", x: 0, y: 0, w: 6, ...m("streamPreview") },
+    { i: "liveChat", x: 6, y: 0, w: 6, ...m("liveChat") },
+    { i: "activityFeed", x: 0, y: 14, w: 4, ...m("activityFeed") },
+    { i: "quickActions", x: 4, y: 14, w: 8, ...m("quickActions") }
   ];
   return replicateLayoutToAllBreakpoints(lg);
 }
@@ -198,6 +203,31 @@ export function migrateLayoutsV2ToV3(layouts: Layouts): Layouts {
   return scaleLayouts(layouts, 4, 1);
 }
 
+const V3_COLS = 128;
+const V4_COLS = DASHBOARD_GRID_COLS;
+
+/**
+ * v3 → v4: 128 → 12 columns. Vertical grid rows are unchanged (same rowHeight).
+ */
+export function migrateLayoutsV3ToV4(layouts: Layouts): Layouts {
+  const out = {} as Layouts;
+  for (const bp of LAYOUT_BP_KEYS) {
+    out[bp] = ((layouts[bp] ?? []) as Layout[]).map((item) => {
+      const x = Math.round(((item.x ?? 0) * V4_COLS) / V3_COLS);
+      let w = Math.max(1, Math.round(((item.w ?? 1) * V4_COLS) / V3_COLS));
+      const xClamped = Math.min(x, Math.max(0, V4_COLS - w));
+      if (xClamped + w > V4_COLS) w = V4_COLS - xClamped;
+      return {
+        ...item,
+        x: xClamped,
+        w: Math.max(1, w),
+        minW: item.minW != null ? Math.max(1, Math.round((item.minW * V4_COLS) / V3_COLS)) : item.minW
+      } as Layout;
+    }) as Layout[];
+  }
+  return out;
+}
+
 /** Serialised envelope persisted to localStorage + the dashboard layout DB row. */
 type StoredLayoutsEnvelope = { __v: number; layouts: Layouts };
 
@@ -226,6 +256,10 @@ function migrateLayoutsToLatest(layouts: Layouts, fromVersion: number): Layouts 
   if (version < 3) {
     current = migrateLayoutsV2ToV3(current);
     version = 3;
+  }
+  if (version < 4) {
+    current = migrateLayoutsV3ToV4(current);
+    version = 4;
   }
   return current;
 }

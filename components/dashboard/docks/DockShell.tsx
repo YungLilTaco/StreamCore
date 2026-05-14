@@ -9,6 +9,9 @@ export function DockShell({
   right,
   children,
   className,
+  contentClassName,
+  /** Twitch/iframe docks: no outer scroll, no padding — avoids covering the embed hit target. */
+  bodyMode = "default",
   dragHandleProps,
   onClose,
   dockLocked,
@@ -18,6 +21,8 @@ export function DockShell({
   right?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  contentClassName?: string;
+  bodyMode?: "default" | "embed";
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   onClose?: () => void;
   /** This dock only — locked = cannot drag/resize the tile */
@@ -27,8 +32,9 @@ export function DockShell({
   return (
     <Card
       className={cn(
-        "flex h-full min-h-0 flex-col overflow-hidden bg-white/5 backdrop-blur-md",
-        "border border-white/10",
+        "flex h-full min-h-0 flex-col overflow-hidden border border-white/10",
+        /* ~80% transparent glass (20% surface) + single blur pass */
+        "bg-black/20 backdrop-blur-xl ring-1 ring-white/[0.08]",
         className
       )}
     >
@@ -79,7 +85,17 @@ export function DockShell({
           ) : null}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+      <div
+        className={cn(
+          "min-h-0 flex-1",
+          bodyMode === "embed"
+            ? "flex flex-col overflow-hidden p-0"
+            : "overflow-y-auto p-4",
+          contentClassName
+        )}
+      >
+        {children}
+      </div>
     </Card>
   );
 }

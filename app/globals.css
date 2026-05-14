@@ -80,15 +80,20 @@ body {
  * UX is fiddly: users have to land their cursor on the exact corner pixel. We override every
  * handle to:
  *   1. Hide the visual indicator (`background: none`, `::after` content stripped).
- *   2. Stretch side handles along the entire edge of the tile so resizing works no matter where
- *      the user grabs.
+ *   2. Stretch side handles along almost the entire edge of the tile so resizing works no matter
+ *      where the user grabs along that edge.
  *   3. Keep corner handles as small overlay squares that take precedence at the corners (their
  *      `z-index` sits above the sides) and carry the diagonal `nwse-resize` / `nesw-resize`
  *      cursors so they read as "drag in both axes".
  *
- * The side handle thickness (6px) is a compromise — enough surface area for an easy grab on a
- * trackpad without obscuring meaningful tile content beneath. Sides skip the corner pixels via
- * `inset: 10px` so the corner handles always win the hit-test where they overlap.
+ * `pointer-events: auto !important` is set explicitly so no ancestor with `pointer-events: none`
+ * can ever swallow the click — without it, transient parent state during gesture animations was
+ * the suspected cause of "edges feel dead, only corners work".
+ *
+ * `z-index` is bumped to 5 (was 1) so the handle layer wins against ANY child of the dock card
+ * that might create its own stacking context (e.g. iframes, `backdrop-filter` panels, dock chrome
+ * with `relative z-N` Tailwind utilities). Corners go to 6 so they still win where they overlap
+ * the sides.
  */
 .react-grid-item > .react-resizable-handle {
   background: none !important;
@@ -96,7 +101,8 @@ body {
   margin: 0 !important;
   transform: none !important;
   opacity: 1;
-  z-index: 1;
+  z-index: 5 !important;
+  pointer-events: auto !important;
   /* Handles themselves must never start a text selection on mousedown. */
   user-select: none;
   -webkit-user-select: none;
@@ -108,23 +114,21 @@ body {
 }
 
 /*
- * Hitbox sizing (tuned for easy mouse + trackpad grabs without intruding on dock content):
- *   - Side handles are 12px thick — about 2× the original 6px so the cursor changes well before
- *     the user is on the exact pixel of the edge. Dock cards have `p-4` (16px) of internal
- *     padding, so a 12px hitbox lives entirely inside that padding band and never overlaps real
- *     content like text or buttons.
- *   - Corner squares are 22×22px and stay layered on top (z-index 2), so they always win the
- *     hit-test at the four corners and give a generous diagonal-resize grab area.
- *   - Sides are inset 18px from each corner so the corner squares fully cover their territory;
- *     z-index already makes corners win regardless, but the inset stops the cursor from
- *     momentarily flickering between cardinal and diagonal arrows near the meeting point.
+ * Hitbox sizing — invisible but generous enough that the resize cursor lights up reliably:
+ *   - Side handles: 10px thick strips along each edge. Cursor swaps over the strip; nothing is
+ *     painted, so neighbouring dock content reads normally right up to the handle boundary.
+ *   - Side strips inset 14px from each end so the 14×14 corner squares own the literal corners
+ *     with their diagonal cursors. No dead zone between corner and side: the side strip starts
+ *     immediately after the corner square ends.
+ *   - Corner squares 14×14: large enough to grab, small enough that they don't bleed into the
+ *     dock's interior click targets.
  */
 .react-grid-item > .react-resizable-handle-s,
 .react-grid-item > .react-resizable-handle-n {
-  left: 18px !important;
-  right: 18px !important;
+  left: 14px !important;
+  right: 14px !important;
   width: auto !important;
-  height: 12px !important;
+  height: 10px !important;
 }
 .react-grid-item > .react-resizable-handle-s {
   bottom: 0 !important;
@@ -138,9 +142,9 @@ body {
 }
 .react-grid-item > .react-resizable-handle-w,
 .react-grid-item > .react-resizable-handle-e {
-  top: 18px !important;
-  bottom: 18px !important;
-  width: 12px !important;
+  top: 14px !important;
+  bottom: 14px !important;
+  width: 10px !important;
   height: auto !important;
 }
 .react-grid-item > .react-resizable-handle-w {
@@ -154,14 +158,14 @@ body {
   cursor: ew-resize;
 }
 
-/* Corner handles: small squares layered on top of the sides for diagonal resize. */
+/* Corner handles: small invisible squares layered on top of the sides for diagonal resize. */
 .react-grid-item > .react-resizable-handle-se,
 .react-grid-item > .react-resizable-handle-sw,
 .react-grid-item > .react-resizable-handle-ne,
 .react-grid-item > .react-resizable-handle-nw {
-  width: 22px !important;
-  height: 22px !important;
-  z-index: 2;
+  width: 14px !important;
+  height: 14px !important;
+  z-index: 6 !important;
 }
 .react-grid-item > .react-resizable-handle-se {
   bottom: 0 !important;
@@ -190,6 +194,26 @@ body {
   bottom: auto !important;
   right: auto !important;
   cursor: nwse-resize;
+}
+
+/*
+ * Live chat iframe: react-grid resize handles sit above the embed (z-index 5–6).
+ * Twitch treats any overlap as “obscured” and disables mod/broadcaster typing. Disable pointer
+ * events on ALL handles for `.sv-grid-iframe-dock` tiles; layout items also set `isResizable: false`
+ * for `liveChat` in `normalizeDashboardLayoutItem` so handles are usually not rendered — this rule is a fallback.
+ */
+.react-grid-item.sv-grid-iframe-dock > .react-resizable-handle {
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+/*
+ * Live chat embed: raise the whole tile in the dashboard stacking order so neighbouring dock
+ * chrome (borders, shadows, slight overlap from transforms) does not sit above the iframe
+ * rect — Twitch detects that as “obscured” and blocks mod/broadcaster typing.
+ */
+.react-grid-item.sv-grid-iframe-dock {
+  z-index: 8;
 }
 
 .react-grid-item.react-draggable-dragging {
@@ -374,8 +398,10 @@ body[data-resize-axis] .react-grid-item.resizing * {
 }
 
 /* Fade the dock body to a faint ghost. The overlay layer renders the projected-size outline
-   on top, so the user reads the relationship as "outline = future, faded body = present". */
-.sv-dock-shrinking > * {
+   on top, so the user reads the relationship as "outline = future, faded body = present".
+   Resize handles are excluded — they must stay fully grabbable so the user can keep resizing
+   the dock while the resolver is animating it. */
+.sv-dock-shrinking > *:not(.react-resizable-handle) {
   opacity: 0.18;
   transition: opacity 140ms ease;
 }

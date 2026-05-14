@@ -21,8 +21,8 @@ import {
   Zap
 } from "lucide-react";
 import { DockShell } from "@/components/dashboard/docks/DockShell";
-import { useTwitchEventSub } from "@/components/dashboard/docks/useTwitchEventSub";
 import { useSelectedChannel } from "@/components/app/SelectedChannelProvider";
+import { useDashboardSession } from "@/components/app/DashboardSessionProvider";
 import { useIsAnyDockDragging } from "@/components/dashboard/useDockDragging";
 import { cn } from "@/components/lib/cn";
 import { Button } from "@/components/ui/button";
@@ -216,11 +216,7 @@ export function ActivityFeedDock({
   const [filterMenuOpen, setFilterMenuOpen] = React.useState(false);
   const [nowMs, setNowMs] = React.useState(() => Date.now());
 
-  // EventSub WS: real-time durable events for own channel only (Twitch token must == broadcaster).
-  const { liveEvents } = useTwitchEventSub({
-    enabled: ready && isSelfChannel,
-    channelTwitchId
-  });
+  const { eventSubLiveEvents: liveEvents } = useDashboardSession();
 
   React.useLayoutEffect(() => {
     setFilters(readFiltersFromStorage());
@@ -281,6 +277,17 @@ export function ActivityFeedDock({
           const kind = coerceActivityFeedKind(row.kind);
           if (!kind) continue;
           const r = row as unknown as Record<string, unknown>;
+          let channelPointsRedemption: ActivityFeedItemDTO["channelPointsRedemption"];
+          const cp = r.channelPointsRedemption;
+          if (cp && typeof cp === "object") {
+            const o = cp as Record<string, unknown>;
+            const rewardId = typeof o.rewardId === "string" ? o.rewardId : "";
+            const redemptionId = typeof o.redemptionId === "string" ? o.redemptionId : "";
+            const userInput = typeof o.userInput === "string" ? o.userInput : "";
+            if (rewardId && redemptionId) {
+              channelPointsRedemption = { rewardId, redemptionId, userInput };
+            }
+          }
           normalized.push({
             id: row.id,
             kind,
@@ -291,7 +298,8 @@ export function ActivityFeedDock({
             actorDisplayName: optionalStr(r, "actorDisplayName"),
             targetLogin: optionalStr(r, "targetLogin"),
             targetTwitchId: optionalStr(r, "targetTwitchId"),
-            targetDisplayName: optionalStr(r, "targetDisplayName")
+            targetDisplayName: optionalStr(r, "targetDisplayName"),
+            channelPointsRedemption
           });
         }
         normalized.sort((a, b) => b.ts - a.ts || String(a.id).localeCompare(String(b.id)));
