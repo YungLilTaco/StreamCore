@@ -5,6 +5,7 @@
 export function twitchEmbedParentHostnames(): string[] {
   const hosts = new Set<string>();
   hosts.add("localhost");
+  hosts.add("127.0.0.1");
 
   const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (raw) {
@@ -17,6 +18,11 @@ export function twitchEmbedParentHostnames(): string[] {
   }
 
   if (typeof window !== "undefined" && window.location?.hostname) {
+    hosts.add(window.location.hostname);
+  }
+
+  // ngrok / preview tunnels (e.g. *.ngrok-free.dev)
+  if (typeof window !== "undefined" && window.location?.hostname?.includes("ngrok")) {
     hosts.add(window.location.hostname);
   }
 

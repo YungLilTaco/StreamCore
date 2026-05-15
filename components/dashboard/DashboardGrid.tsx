@@ -22,7 +22,7 @@ import {
 } from "@/lib/dashboard-layout-defaults";
 
 import { StreamPreviewDock } from "@/components/dashboard/docks/StreamPreviewDock";
-import { LiveChatDock } from "@/components/dashboard/docks/LiveChatDock";
+import { ChatDock } from "@/components/dashboard/docks/ChatDock";
 import { RewardsQueueDock } from "@/components/dashboard/docks/RewardsQueueDock";
 import { ActivityFeedDock } from "@/components/dashboard/docks/ActivityFeedDock";
 import { QuickActionsDock } from "@/components/dashboard/docks/QuickActionsDock";
@@ -76,7 +76,7 @@ function sanitizeLayoutItem(item: Layout): Layout {
     maxW?: number;
     maxH?: number;
   };
-  const { static: _st, isDraggable: _d, maxW: _mw, maxH: _mh, ...rest } = x;
+  const { static: _st, isDraggable: _d, isResizable: _r, maxW: _mw, maxH: _mh, ...rest } = x;
   return rest as Layout;
 }
 
@@ -1156,8 +1156,8 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
 
     const dockMenuPanel =
       dockMenuOpen ? (
-        <div className="pointer-events-auto w-[340px] overflow-hidden rounded-lg border border-white/10 bg-black/20 shadow-2xl shadow-black/50 backdrop-blur-xl ring-1 ring-white/[0.08]">
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-black/40 px-4 py-3 backdrop-blur-md">
+        <div className="sv-dock-menu-panel pointer-events-auto w-[340px] overflow-hidden rounded-lg border border-white/10 shadow-2xl shadow-black/70 ring-1 ring-white/10">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 px-4 py-3">
             <div className="text-sm font-semibold text-white">Add Dock</div>
             <button
               type="button"
@@ -1168,7 +1168,7 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
             </button>
           </div>
           <div className="max-h-[min(70vh,520px)] overflow-y-auto p-2">
-            <div className="px-3 pb-2 text-xs text-white/55">
+            <div className="px-3 pb-2 text-xs text-white/80">
               Toggle a dock on or off, or drag a hidden dock into the grid for precise placement.
             </div>
             <div className="space-y-1">
@@ -1204,16 +1204,19 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
                     aria-checked={d.isVisible}
                     draggable={false}
                     onClick={() => (d.isVisible ? hideDock(d.key) : addDock(d.key))}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/35 bg-black/30 transition hover:border-primary/60 hover:bg-primary/10"
+                    className={cn(
+                      "relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-200",
+                      d.isVisible
+                        ? "border-primary/60 bg-primary/90"
+                        : "border-white/20 bg-white/10"
+                    )}
                     title={d.isVisible ? "Hide dock" : "Show dock"}
                   >
                     <span
                       aria-hidden
                       className={cn(
-                        "rounded-full border-2 transition-all duration-200 ease-out",
-                        d.isVisible
-                          ? "h-4 w-4 border-primary bg-primary shadow-[0_0_12px_rgba(168,85,247,0.75)]"
-                          : "h-4 w-4 border-primary bg-transparent shadow-none"
+                        "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200",
+                        d.isVisible ? "left-[18px]" : "left-0.5"
                       )}
                     />
                   </button>
@@ -1315,8 +1318,8 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
               </div>
             ) : null}
             {visible.includes("liveChat") ? (
-              <div key="liveChat" className={cn(shrinkClass("liveChat"), "sv-grid-iframe-dock")}>
-                <LiveChatDock
+              <div key="liveChat" className={shrinkClass("liveChat")}>
+                <ChatDock
                   onClose={() => hideDock("liveChat")}
                   dockLocked={Boolean(dockLocks.liveChat)}
                   onToggleDockLock={() => toggleDockLock("liveChat")}

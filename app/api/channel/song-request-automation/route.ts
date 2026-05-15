@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getProviderAccessToken } from "@/lib/tokens";
-import { extractSpotifyTrackUri, spotifyTrackIdFromUri } from "@/lib/spotify-track-uri";
+import { resolveSpotifyTrackFromQuery } from "@/lib/spotify-track-search";
 
 async function assertOwnChannel(userId: string, channelTwitchId: string): Promise<boolean> {
   const tw = await prisma.account.findFirst({
@@ -29,58 +29,6 @@ function passesRequestGate(
     (!cfg.vipsOnly || flags.isVip) &&
     (!cfg.modsOnly || flags.isMod)
   );
-}
-
-async function resolveSpotifyTrack(
-  accessToken: string,
-  query: string
-): Promise<{ uri: string; title: string; artist: string } | null> {
-  const trimmed = query.trim();
-  if (!trimmed) return null;
-
-  const fromUri = extractSpotifyTrackUri(trimmed);
-  if (fromUri) {
-    const id = spotifyTrackIdFromUri(fromUri);
-    if (!id) return null;
-    const r = await fetch(`https://api.spotify.com/v1/tracks/${encodeURIComponent(id)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: "no-store"
-    });
-    if (!r.ok) return null;
-    const t = (await r.json()) as {
-      name?: string;
-      artists?: { name?: string }[];
-      uri?: string;
-    };
-    return {
-      uri: t.uri || fromUri,
-      title: t.name?.trim() || "Unknown track",
-      artist: (t.artists ?? [])
-        .map((a) => a.name)
-        .filter(Boolean)
-        .join(", ") || "Unknown artist"
-    };
-  }
-
-  const qs = new URLSearchParams({ q: trimmed, type: "track", limit: "1" });
-  const r = await fetch(`https://api.spotify.com/v1/search?${qs}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store"
-  });
-  if (!r.ok) return null;
-  const j = (await r.json()) as {
-    tracks?: { items?: { name?: string; uri?: string; artists?: { name?: string }[] }[] };
-  };
-  const it = j.tracks?.items?.[0];
-  if (!it?.uri) return null;
-  return {
-    uri: it.uri,
-    title: it.name?.trim() || "Unknown track",
-    artist: (it.artists ?? [])
-      .map((a) => a.name)
-      .filter(Boolean)
-      .join(", ") || "Unknown artist"
-  };
 }
 
 async function spotifyAddToQueue(
@@ -222,7 +170,7 @@ export async function POST(req: Request) {
     return Response.json({ message: "Spotify not connected. Link Spotify in Settings." }, { status: 400 });
   }
 
-  const resolved = await resolveSpotifyTrack(spotifyToken, query);
+  const resolved = await resolveSpotifyTrackFromQuery(spotifyToken, query);
   if (!resolved) {
     return Response.json({ message: "Could not find that track on Spotify." }, { status: 400 });
   }

@@ -1,10 +1,10 @@
 import { auth } from "@/auth";
 import { getProviderAccessToken } from "@/lib/tokens";
+import { resolveSpotifyTrackFromQuery, searchSpotifyTracks } from "@/lib/spotify-track-search";
+import { extractSpotifyTrackUri } from "@/lib/spotify-track-uri";
 
 /**
  * GET /api/spotify/search?q=…&limit=5
- *
- * Returns `{ tracks: [{ id, name, artists, uri }] }` for the signed-in user's Spotify account.
  */
 export async function GET(req: Request) {
   const session = await auth();
@@ -17,35 +17,21 @@ export async function GET(req: Request) {
 
   const { accessToken } = await getProviderAccessToken(session.user.id, "spotify");
 
-  const qs = new URLSearchParams({
-    q,
-    type: "track",
-    limit: String(limit)
-  });
-  const res = await fetch(`https://api.spotify.com/v1/search?${qs}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store"
-  });
-  if (!res.ok) {
-    const t = await res.text();
-    return Response.json({ message: t || `Spotify ${res.status}` }, { status: res.status });
+  if (extractSpotifyTrackUri(q)) {
+    const one = await resolveSpotifyTrackFromQuery(accessToken, q);
+    if (!one) return Response.json({ tracks: [] });
+    return Response.json({
+      tracks: [{ id: one.id, name: one.title, uri: one.uri, artists: one.artist.split(", ") }]
+    });
   }
-  const json = (await res.json()) as {
-    tracks?: {
-      items?: {
-        id: string;
-        name: string;
-        uri: string;
-        artists?: { name: string }[];
-      }[];
-    };
-  };
-  const items = json.tracks?.items ?? [];
-  const tracks = items.map((it) => ({
-    id: it.id,
-    name: it.name,
-    uri: it.uri,
-    artists: (it.artists ?? []).map((a) => a.name).filter(Boolean)
-  }));
-  return Response.json({ tracks });
+
+  const hits = await searchSpotifyTracks(accessToken, q, limit);
+  return Response.json({
+    tracks: hits.map((h) => ({
+      id: h.id,
+      name: h.title,
+      uri: h.uri,
+      artists: h.artist.split(", ")
+    }))
+  });
 }

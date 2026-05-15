@@ -2,11 +2,24 @@
 
 import * as React from "react";
 import { signIn } from "next-auth/react";
-import { Heart, ListMusic, Music2, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
+import {
+  Heart,
+  HelpCircle,
+  ListMusic,
+  Music2,
+  Pause,
+  Play,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX
+} from "lucide-react";
+import { useDebouncedCallback } from "@/lib/hooks/use-debounced-callback";
 import { DockShell } from "@/components/dashboard/docks/DockShell";
 import { cn } from "@/components/lib/cn";
 import { useSelectedChannel } from "@/components/app/SelectedChannelProvider";
 import { spotifyTrackIdFromUri } from "@/lib/spotify-track-uri";
+import { spotifySignInOptions } from "@/lib/spotify-oauth";
 
 /**
  * Subset of Spotify's `/me/player/currently-playing` response we render. The endpoint may
@@ -30,6 +43,7 @@ type NowPlayingResponse = {
 
 type TrackView = {
   id: string;
+  itemType: string;
   title: string;
   artist: string;
   art: string | null;
@@ -115,9 +129,12 @@ function useNowPlaying(refreshSignal: number): { track: TrackView | null; error:
             setTrack(null);
           } else {
             const item = json.item;
-            const id = item.id ?? `${item.name}-${item.artists?.map((a) => a.name).join(",")}`;
+            const rawId = item.id?.trim() ?? "";
+            const id = /^[A-Za-z0-9]{22}$/.test(rawId) ? rawId : "";
+            const itemType = (item as { type?: string }).type ?? "track";
             setTrack({
               id,
+              itemType,
               title: item.name ?? "Untitled",
               artist: (item.artists ?? []).map((a) => a.name).join(", ") || "Unknown artist",
               art: pickArt(item),
@@ -174,10 +191,16 @@ export function SpotifyBridgeDock({
   const { track, error } = useNowPlaying(refreshSignal);
   const triggerRefresh = React.useCallback(() => setRefreshSignal((n) => n + 1), []);
 
-  const [liked, setLiked] = React.useState<boolean | null>(null);
+  const [isLiked, setIsLiked] = React.useState<boolean | null>(null);
   const [volume, setVolume] = React.useState<number | null>(null);
   const [pendingAction, setPendingAction] = React.useState<string | null>(null);
-  const [actionError, setActionError] = React.useState<string | null>(null);
+  const [controlError, setControlError] = React.useState<string | null>(null);
+  const [likeError, setLikeError] = React.useState<string | null>(null);
+  /** Session memory when Spotify read sync is flaky — keeps heart accurate after you toggle. */
+  const likeOverridesRef = React.useRef<Map<string, boolean>>(new Map());
+  const [rateLimitUntil, setRateLimitUntil] = React.useState<number>(0);
+  const volumeSentRef = React.useRef<number | null>(null);
+  const volumePendingRef = React.useRef<number | null>(null);
 
   const [songQueue, setSongQueue] = React.useState<QueueItemDTO[]>([]);
   const [spotifyLinked, setSpotifyLinked] = React.useState<boolean | null>(null);
@@ -193,8 +216,10 @@ export function SpotifyBridgeDock({
     let cancelled = false;
     void fetch("/api/spotify/link-status", { cache: "no-store" })
       .then(async (r) => (r.ok ? r.json() : null))
-      .then((j: { linked?: boolean } | null) => {
-        if (!cancelled) setSpotifyLinked(Boolean(j?.linked));
+      .then((j: { linked?: boolean; libraryScopesOk?: boolean } | null) => {
+        if (cancelled) return;
+        setSpotifyLinked(Boolean(j?.linked));
+        if (j?.linked) setLibraryScopeOk(j.libraryScopesOk !== false);
       })
       .catch(() => {
         if (!cancelled) setSpotifyLinked(false);
@@ -255,36 +280,53 @@ export function SpotifyBridgeDock({
       });
   }, [ready, channelTwitchId, track?.id, track?.isPlaying, songQueue]);
 
-  // Reload "liked" state whenever the track id changes.
+  // Reload liked state after track change — never surfaces read failures as dock-wide errors.
   React.useEffect(() => {
     if (!track?.id || track.id.length !== 22) {
-      setLiked(null);
+      setIsLiked(null);
+      setLikeError(null);
       setLibraryScopeOk(true);
       return;
     }
+
+    const override = likeOverridesRef.current.get(track.id);
+    if (override !== undefined) {
+      setIsLiked(override);
+    } else {
+      setIsLiked(null);
+    }
+
     let cancelled = false;
-    fetch(`/api/spotify/like?id=${encodeURIComponent(track.id)}`, { cache: "no-store" })
-      .then(async (r) => {
-        const j = (await r.json().catch(() => null)) as { liked?: boolean; code?: string } | null;
-        if (cancelled) return;
-        if (r.status === 401 || r.status === 403) {
-          setLibraryScopeOk(false);
-          setLiked(false);
-          return;
-        }
-        setLibraryScopeOk(true);
-        setLiked(typeof j?.liked === "boolean" ? j.liked : false);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLiked(false);
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/spotify/like?id=${encodeURIComponent(track.id)}`, { cache: "no-store" })
+        .then(async (r) => {
+          const j = (await r.json().catch(() => null)) as {
+            liked?: boolean | null;
+            unknown?: boolean;
+            code?: string;
+          } | null;
+          if (cancelled) return;
+          if (j?.code === "scope_required") {
+            setLibraryScopeOk(false);
+            return;
+          }
+          if (!r.ok) return;
           setLibraryScopeOk(true);
-        }
-      });
+          if (typeof j?.liked === "boolean") {
+            likeOverridesRef.current.set(track.id, j.liked);
+            setIsLiked(j.liked);
+            setLikeError(null);
+          }
+        })
+        .catch(() => {
+          /* keep override / previous isLiked */
+        });
+    }, 1000);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [track?.id]);
+  }, [track?.id, refreshSignal]);
 
   // Volume: prefer an active, non-restricted device (Spotify returns 403 if the active output
   // cannot be volume-controlled).
@@ -311,7 +353,7 @@ export function SpotifyBridgeDock({
 
   async function doAction(action: "play" | "pause" | "next" | "previous") {
     setPendingAction(action);
-    setActionError(null);
+    setControlError(null);
     try {
       const res = await fetch(`/api/spotify/playback?action=${action}`, { method: "POST" });
       if (!res.ok) {
@@ -320,36 +362,65 @@ export function SpotifyBridgeDock({
       }
       triggerRefresh();
     } catch (e) {
-      setActionError(typeof (e as Error)?.message === "string" ? (e as Error).message : "Action failed");
+      setControlError(typeof (e as Error)?.message === "string" ? (e as Error).message : "Action failed");
     } finally {
       setPendingAction(null);
     }
   }
 
-  async function setVolumeAction(value: number) {
-    setActionError(null);
-    const prevVol = volume;
-    setVolume(value); // optimistic
-    try {
-      const res = await fetch(`/api/spotify/playback?action=volume&value=${Math.round(value)}`, {
-        method: "POST"
-      });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => null)) as { message?: string; code?: string } | null;
-        setVolume(prevVol ?? null);
-        if (res.status === 409) triggerRefresh();
-        throw new Error(json?.message ?? `Spotify ${res.status}`);
+  const commitVolume = React.useCallback(
+    async (value: number) => {
+      const rounded = Math.round(value);
+      if (volumeSentRef.current === rounded) return;
+      if (Date.now() < rateLimitUntil) return;
+
+      setControlError(null);
+      const prevVol = volume;
+      try {
+        const res = await fetch(`/api/spotify/playback?action=volume&value=${rounded}`, { method: "POST" });
+        if (res.status === 429) {
+          setRateLimitUntil(Date.now() + 30_000);
+          setControlError("Spotify rate limit — cooling down (~30s).");
+          setVolume(prevVol ?? null);
+          return;
+        }
+        if (!res.ok) {
+          const json = (await res.json().catch(() => null)) as { message?: string; code?: string } | null;
+          setVolume(prevVol ?? null);
+          if (res.status === 409) triggerRefresh();
+          const msg = json?.message ?? `Spotify ${res.status}`;
+          if (res.status === 403) {
+            setControlError("This device cannot be controlled remotely. Open Spotify on that device.");
+            return;
+          }
+          throw new Error(msg);
+        }
+        volumeSentRef.current = rounded;
+      } catch (e) {
+        setControlError(typeof (e as Error)?.message === "string" ? (e as Error).message : "Volume failed");
       }
-    } catch (e) {
-      setActionError(typeof (e as Error)?.message === "string" ? (e as Error).message : "Volume failed");
-    }
+    },
+    [rateLimitUntil, triggerRefresh, volume]
+  );
+
+  const debouncedCommitVolume = useDebouncedCallback(commitVolume, 400);
+
+  function setVolumeAction(value: number) {
+    volumePendingRef.current = value;
+    setVolume(value);
+    debouncedCommitVolume(value);
   }
 
   async function toggleLike() {
     if (!libraryScopeOk || !track?.id || track.id.length !== 22) return;
-    const nextLiked = !(liked === true);
-    setLiked(nextLiked); // optimistic
-    setActionError(null);
+    if (track.itemType && track.itemType !== "track") {
+      setLikeError("Only music tracks can be saved to Liked Songs (not episodes or shows).");
+      return;
+    }
+    const nextLiked = !(isLiked === true);
+    setIsLiked(nextLiked);
+    setLikeError(null);
+    likeOverridesRef.current.set(track.id, nextLiked);
     try {
       const res = await fetch("/api/spotify/like", {
         method: "POST",
@@ -358,53 +429,62 @@ export function SpotifyBridgeDock({
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as { message?: string; code?: string } | null;
-        // Roll back the optimistic flip on failure.
-        setLiked(!nextLiked);
-        if (res.status === 401 || res.status === 403) setLibraryScopeOk(false);
+        setIsLiked(!nextLiked);
+        likeOverridesRef.current.delete(track.id);
+        if (json?.code === "scope_required") setLibraryScopeOk(false);
         throw new Error(json?.message ?? `Spotify ${res.status}`);
       }
+      const j = (await res.json().catch(() => null)) as { liked?: boolean } | null;
+      if (typeof j?.liked === "boolean") {
+        setIsLiked(j.liked);
+        likeOverridesRef.current.set(track.id, j.liked);
+      }
     } catch (e) {
-      setActionError(typeof (e as Error)?.message === "string" ? (e as Error).message : "Like failed");
+      setLikeError(typeof (e as Error)?.message === "string" ? (e as Error).message : "Like failed");
     }
   }
+
+  const headerActions = (
+    <>
+      <span
+        className={cn(
+          "text-[10px] font-medium",
+          spotifyLinked ? "text-emerald-300/90" : "text-amber-200/80"
+        )}
+      >
+        {spotifyLinked === null ? "…" : spotifyLinked ? "Linked" : "Not linked"}
+      </span>
+      <button
+        type="button"
+        data-rgl-no-drag
+        onClick={() =>
+          void signIn(
+            "spotify",
+            spotifySignInOptions(
+              typeof window !== "undefined" ? window.location.href : "/app/dashboard"
+            )
+          )
+        }
+        className="rounded-md border border-white/10 px-2 py-1 text-[10px] font-semibold text-white/85 transition hover:bg-white/[0.08]"
+      >
+        {spotifyLinked ? "Relink" : "Link"}
+      </button>
+      <SpotifyBridgeHelp />
+    </>
+  );
+
+  const coolingDown = Date.now() < rateLimitUntil;
 
   return (
     <DockShell
       title="Spotify Bridge"
+      actions={headerActions}
       dragHandleProps={dragHandleProps}
       onClose={onClose}
       dockLocked={dockLocked}
       onToggleDockLock={onToggleDockLock}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-black/25 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-white/55">
-              Spotify:{" "}
-              <span className={cn("font-semibold", spotifyLinked ? "text-emerald-300/90" : "text-amber-200/90")}>
-                {spotifyLinked === null ? "…" : spotifyLinked ? "Linked" : "Not linked"}
-              </span>
-            </span>
-            <button
-              type="button"
-              data-rgl-no-drag
-              onClick={() =>
-                void signIn("spotify", {
-                  callbackUrl: typeof window !== "undefined" ? window.location.href : "/app/dashboard"
-                })
-              }
-              className="inline-flex items-center rounded-md border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-white/90 transition hover:bg-white/[0.1]"
-            >
-              {spotifyLinked ? "Relink Spotify" : "Link Spotify"}
-            </button>
-          </div>
-          <p className="text-[11px] leading-snug text-white/45">
-            Remote playback control, queueing from StreamCore, and channel-point song requests require{" "}
-            <span className="text-white/70">Spotify Premium</span> (or another plan that allows the Web API player).
-            After changing Spotify permissions, use Relink once so your token includes the new scopes.
-          </p>
-        </div>
-
         {error && !track ? (
           <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-100">
             {error}
@@ -442,26 +522,40 @@ export function SpotifyBridgeDock({
           </div>
           <button
             type="button"
-            disabled={!libraryScopeOk || !track?.id || track.id.length !== 22}
+            disabled={
+              !libraryScopeOk ||
+              !track?.id ||
+              track.id.length !== 22 ||
+              (track.itemType ? track.itemType !== "track" : false)
+            }
             onClick={() => void toggleLike()}
             data-rgl-no-drag
             className={cn(
               "inline-flex h-9 w-9 items-center justify-center rounded-md border transition disabled:opacity-40",
-              liked === true
-                ? "border-pink-400/40 bg-pink-500/15 text-pink-300 hover:bg-pink-500/25"
-                : "border-white/10 bg-white/[0.04] text-white/60 hover:bg-white/[0.08] hover:text-pink-200"
+              isLiked === true
+                ? "border-primary/50 bg-primary/20 text-primary hover:bg-primary/30"
+                : "border-white/10 bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-primary/80"
             )}
             title={
               !libraryScopeOk
                 ? "Reconnect Spotify (library scopes) to use Liked Songs"
-                : liked === true
-                  ? "Unlike"
-                  : "Like"
+                : likeError
+                  ? likeError
+                  : !track?.id
+                    ? "Waiting for a Spotify track id…"
+                    : isLiked === true
+                      ? "Unlike"
+                      : isLiked === false
+                        ? "Like"
+                        : "Save to Liked Songs"
             }
-            aria-label={liked === true ? "Remove from Liked Songs" : "Save to Liked Songs"}
+            aria-label={isLiked === true ? "Remove from Liked Songs" : "Save to Liked Songs"}
           >
             <Heart
-              className={cn("h-4 w-4", liked === true ? "fill-current stroke-[1.5]" : "fill-none stroke-[1.75]")}
+              className={cn(
+                "h-4 w-4",
+                isLiked === true ? "fill-primary text-primary stroke-primary" : "fill-none stroke-[1.75] text-white/55"
+              )}
             />
           </button>
         </div>
@@ -536,7 +630,7 @@ export function SpotifyBridgeDock({
               max={100}
               step={1}
               value={volume ?? 0}
-              disabled={volume === null}
+              disabled={volume === null || coolingDown}
               onChange={(e) => setVolumeAction(Number(e.target.value))}
               data-rgl-no-drag
               className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-primary disabled:opacity-50"
@@ -546,21 +640,47 @@ export function SpotifyBridgeDock({
               {volume === null ? "—" : `${volume}%`}
             </span>
           </div>
-          {volume === null ? (
+          {coolingDown ? (
+            <p className="text-[11px] text-amber-200/90">Cooling down — Spotify rate limit. Try again shortly.</p>
+          ) : volume === null ? (
             <p className="text-[11px] leading-snug text-white/45">
-              Volume needs an active Spotify device you can control remotely (not a restricted output). Open Spotify on
-              desktop, web, or phone and start playback, then retry.
+              Open Spotify on a controllable device and start playback to adjust volume remotely.
             </p>
           ) : null}
         </div>
 
-        {actionError ? (
+        {controlError ? (
           <div className="rounded-lg border border-rose-500/25 bg-rose-500/10 p-3 text-xs text-rose-100">
-            {actionError}
+            {controlError}
           </div>
         ) : null}
       </div>
     </DockShell>
+  );
+}
+
+function SpotifyBridgeHelp() {
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        data-rgl-no-drag
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+        aria-label="Spotify bridge help"
+      >
+        <HelpCircle className="h-4 w-4" />
+      </button>
+      <div
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-full z-50 mt-1 hidden w-64 rounded-lg border border-white/15 bg-[#121218] p-3 text-[11px] leading-snug text-white/75 shadow-xl group-hover:pointer-events-auto group-hover:block"
+      >
+        <p>
+          Remote playback and song requests need <strong className="text-white">Spotify Premium</strong> (or a plan with
+          Web API player access). Use <strong className="text-white">Relink</strong> after scope changes. Volume updates
+          are debounced to avoid rate limits.
+        </p>
+      </div>
+    </div>
   );
 }
 

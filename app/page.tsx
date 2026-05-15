@@ -1,11 +1,15 @@
+import { auth } from "@/auth";
 import { Header } from "@/components/sections/Header";
 import { Hero } from "@/components/sections/Hero";
 import { FragmentedVsCentralized } from "@/components/sections/FragmentedVsCentralized";
 import { FoundersNote } from "@/components/sections/FoundersNote";
 import { ClosingCTA } from "@/components/sections/ClosingCTA";
 import { Footer } from "@/components/sections/Footer";
+import { redirect } from "next/navigation";
 
-export default function Page() {
+export default async function Page() {
+  const session = await auth();
+  if (session?.user) redirect("/app/dashboard");
   return (
     <div className="min-h-screen bg-black">
       <div className="relative sv-bg">

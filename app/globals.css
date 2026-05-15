@@ -197,23 +197,66 @@ body {
 }
 
 /*
- * Live chat iframe: react-grid resize handles sit above the embed (z-index 5–6).
- * Twitch treats any overlap as “obscured” and disables mod/broadcaster typing. Disable pointer
- * events on ALL handles for `.sv-grid-iframe-dock` tiles; layout items also set `isResizable: false`
- * for `liveChat` in `normalizeDashboardLayoutItem` so handles are usually not rendered — this rule is a fallback.
+ * In-dock Twitch embed: RGL resize handles sit above the iframe (z-index 5–6). Twitch treats that
+ * as “obscured” and blocks mod/broadcaster typing. Disable handles only while embed is active;
+ * the default portal screen can still be resized normally (including bottom edge).
  */
-.react-grid-item.sv-grid-iframe-dock > .react-resizable-handle {
+.react-grid-item:has([data-sv-chat-mode="embed"]) > .react-resizable-handle {
   pointer-events: none !important;
   opacity: 0 !important;
 }
 
-/*
- * Live chat embed: raise the whole tile in the dashboard stacking order so neighbouring dock
- * chrome (borders, shadows, slight overlap from transforms) does not sit above the iframe
- * rect — Twitch detects that as “obscured” and blocks mod/broadcaster typing.
- */
-.react-grid-item.sv-grid-iframe-dock {
-  z-index: 8;
+body[data-dragging] [data-sv-chat-mode="embed"] iframe,
+body[data-resize-axis] [data-sv-chat-mode="embed"] iframe {
+  pointer-events: none;
+}
+
+.sv-dock-menu-panel {
+  background-color: #0a0a0a !important;
+  opacity: 1 !important;
+  color: #ffffff !important;
+}
+
+.sv-dock-menu-panel .text-white\/55,
+.sv-dock-menu-panel .text-white\/60,
+.sv-dock-menu-panel .text-white\/80 {
+  color: #ffffff !important;
+}
+
+.sv-twitch-popout-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  background: #0a0a0c;
+}
+
+.sv-twitch-popout-clip {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #0a0a0c;
+}
+
+.sv-twitch-popout-iframe {
+  position: relative;
+  z-index: 10;
+  display: block;
+  width: 100%;
+  height: calc(100% + var(--sv-popout-clip-top, 52px));
+  margin-top: calc(-1 * var(--sv-popout-clip-top, 52px));
+  border: 0;
+  background: #0a0a0c;
+}
+
+body[data-dragging] .sv-twitch-popout-dock-root .sv-twitch-popout-iframe,
+body[data-resize-axis] .sv-twitch-popout-dock-root .sv-twitch-popout-iframe {
+  pointer-events: none;
+}
+
+.sv-twitch-popout-dock-root .sv-dock-wrap > * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .react-grid-item.react-draggable-dragging {

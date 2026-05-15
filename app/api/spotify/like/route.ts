@@ -1,23 +1,42 @@
 import { auth } from "@/auth";
-import { getProviderAccessToken } from "@/lib/tokens";
+import { prisma } from "@/lib/prisma";
+import { spotifyAccountHasLibraryScopes } from "@/lib/spotify-oauth";
+import {
+  spotifyApiErrorMessage,
+  spotifyLibraryFetch,
+  spotifyTrackIsSaved,
+  spotifyTrackUri
+} from "@/lib/spotify-library-api";
+import { forceRefreshProviderToken, getProviderAccessToken } from "@/lib/tokens";
 
-/**
- * Heart / unheart the current (or a specific) Spotify track.
- *
- * GET  /api/spotify/like?id=<trackId>     → { liked: boolean }   (uses /me/tracks/contains)
- * POST /api/spotify/like                  → body: { id: string, liked: boolean }
- *                                            PUT  /me/tracks?ids=… when `liked: true`
- *                                            DELETE /me/tracks?ids=… when `liked: false`
- *
- * The two-step `contains` → `PUT|DELETE` flow is required: Spotify's Web API has no
- * "toggle" verb. The dock keeps its own optimistic state, but on first load it calls the
- * GET form to render the correct filled-heart visual.
- */
+async function assertLibraryScopes(userId: string) {
+  const account = await prisma.account.findFirst({
+    where: { userId, provider: "spotify" },
+    select: { scope: true }
+  });
+  if (!account) {
+    return Response.json({ message: "Spotify not linked", code: "not_linked" }, { status: 401 });
+  }
+  if (!spotifyAccountHasLibraryScopes(account.scope)) {
+    return Response.json(
+      {
+        message:
+          "Reconnect Spotify and approve library access (user-library-read, user-library-modify).",
+        code: "scope_required"
+      },
+      { status: 403 }
+    );
+  }
+  return null;
+}
 
 function validTrackId(s: unknown): s is string {
-  // Spotify track IDs are 22 alphanumeric chars (base62). We accept anything matching that shape;
-  // anything else short-circuits with a 400 so we don't forward malformed IDs to the upstream.
   return typeof s === "string" && /^[A-Za-z0-9]{22}$/.test(s);
+}
+
+/** Current Spotify Web API — save/remove tracks via `/me/library` (not deprecated query-string `/me/tracks`). */
+function libraryUrl(trackId: string): string {
+  return `https://api.spotify.com/v1/me/library?uris=${encodeURIComponent(spotifyTrackUri(trackId))}`;
 }
 
 export async function GET(req: Request) {
@@ -27,27 +46,20 @@ export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
   if (!validTrackId(id)) return Response.json({ message: "Missing or invalid track id" }, { status: 400 });
 
-  const { accessToken } = await getProviderAccessToken(session.user.id, "spotify");
+  const scopeErr = await assertLibraryScopes(session.user.id);
+  if (scopeErr) return scopeErr;
 
-  const res = await fetch(`https://api.spotify.com/v1/me/tracks/contains?ids=${encodeURIComponent(id)}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store"
-  });
-  if (res.status === 401 || res.status === 403) {
-    return Response.json(
-      {
-        message: "Reconnect Spotify with library scopes (user-library-read, user-library-modify).",
-        code: "scope_required"
-      },
-      { status: res.status }
-    );
+  const liked = await spotifyTrackIsSaved(
+    session.user.id,
+    id,
+    (uid) => getProviderAccessToken(uid, "spotify"),
+    (uid) => forceRefreshProviderToken(uid, "spotify")
+  );
+
+  if (liked === null) {
+    return Response.json({ liked: null, unknown: true });
   }
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    return Response.json({ message: text || `Spotify ${res.status}` }, { status: res.status });
-  }
-  const arr = (await res.json().catch(() => null)) as boolean[] | null;
-  return Response.json({ liked: Boolean(arr?.[0]) });
+  return Response.json({ liked });
 }
 
 export async function POST(req: Request) {
@@ -58,26 +70,24 @@ export async function POST(req: Request) {
   if (!validTrackId(body?.id)) return Response.json({ message: "Missing or invalid track id" }, { status: 400 });
   if (typeof body?.liked !== "boolean") return Response.json({ message: "liked must be a boolean" }, { status: 400 });
 
-  const { accessToken } = await getProviderAccessToken(session.user.id, "spotify");
+  const scopeErr = await assertLibraryScopes(session.user.id);
+  if (scopeErr) return scopeErr;
 
-  const url = `https://api.spotify.com/v1/me/tracks?ids=${encodeURIComponent(body.id!)}`;
-  const res = await fetch(url, {
-    method: body.liked ? "PUT" : "DELETE",
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store"
-  });
-  if (res.status === 401 || res.status === 403) {
+  const url = libraryUrl(body.id!);
+  const { response: res } = await spotifyLibraryFetch(
+    session.user.id,
+    url,
+    { method: body.liked ? "PUT" : "DELETE" },
+    (uid) => getProviderAccessToken(uid, "spotify"),
+    (uid) => forceRefreshProviderToken(uid, "spotify")
+  );
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
     return Response.json(
-      {
-        message: "Reconnect Spotify with library scopes (user-library-read, user-library-modify).",
-        code: "scope_required"
-      },
+      { message: spotifyApiErrorMessage(detail, res.status), code: "spotify_api" },
       { status: res.status }
     );
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    return Response.json({ message: text || `Spotify ${res.status}` }, { status: res.status });
   }
   return Response.json({ ok: true, liked: body.liked });
 }

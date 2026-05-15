@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { setOauthLinkIntent } from "@/lib/oauth-link-intent";
+import { spotifyAccountHasLibraryScopes, spotifySignInOptions } from "@/lib/spotify-oauth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Music2, Twitch, ShieldCheck } from "lucide-react";
@@ -64,6 +65,9 @@ export function SettingsClient({
 }) {
   const hasTwitch = accounts.some((a) => a.provider === "twitch");
   const hasSpotify = accounts.some((a) => a.provider === "spotify");
+  const spotifyAccount = accounts.find((a) => a.provider === "spotify");
+  const spotifyGranted = (spotifyAccount?.scope ?? "").split(/[\s,]+/).filter(Boolean);
+  const spotifyLibraryOk = spotifyAccountHasLibraryScopes(spotifyAccount?.scope);
 
   return (
     <div className="mt-8 grid gap-6 lg:grid-cols-2">
@@ -113,15 +117,25 @@ export function SettingsClient({
         <div className="mt-5 rounded-lg border border-white/10 bg-black/20 p-4">
           <div className="flex items-center gap-2 text-xs font-semibold tracking-wider text-white/60">
             <ShieldCheck className="h-4 w-4 text-white/50" />
-            Permissions requested
+            Scopes granted by Spotify
           </div>
           <ul className="mt-3 space-y-2 text-sm text-white/70">
-            {spotifyScopes.map((s) => (
-              <li key={s} className="font-mono text-[12px] text-white/70">
-                {s}
-              </li>
-            ))}
+            {spotifyGranted.length > 0 ? (
+              spotifyGranted.map((s) => (
+                <li key={s} className="font-mono text-[12px] text-emerald-200/90">
+                  {s}
+                </li>
+              ))
+            ) : (
+              <li className="text-xs text-amber-200/90">None stored — use Re-link Spotify below.</li>
+            )}
           </ul>
+          {!spotifyLibraryOk && hasSpotify ? (
+            <p className="mt-3 text-xs text-amber-200/90">
+              Missing library scopes for the heart button. Remove StreamCore in Spotify → Apps, then Re-link.
+            </p>
+          ) : null}
+          <p className="mt-3 text-[11px] text-white/45">StreamCore requests: {spotifyScopes.join(", ")}</p>
         </div>
 
         <div className="mt-5 flex gap-3">
@@ -130,7 +144,7 @@ export function SettingsClient({
             className="shadow-glow-purple"
             onClick={() => {
               setOauthLinkIntent("spotify", "/app/settings");
-              void signIn("spotify", { callbackUrl: "/app/settings" });
+              void signIn("spotify", spotifySignInOptions("/app/settings"));
             }}
           >
             {hasSpotify ? "Re-link Spotify" : "Link Spotify"}

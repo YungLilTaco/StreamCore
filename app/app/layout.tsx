@@ -10,7 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Server-side protection (production-grade).
   // Redirect unauthenticated users to /login.
   const session = await auth();
-  if (!session?.user?.id) redirect("/login?from=%2Fapp");
+  if (!session?.user?.id) redirect("/login?callbackUrl=%2Fapp%2Fdashboard");
 
   return (
     <Suspense fallback={null}>

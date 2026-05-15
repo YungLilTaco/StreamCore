@@ -119,9 +119,7 @@ export function normalizeDashboardLayoutItem(item: Layout): Layout {
   const minH = meta.minH;
   const minW = meta.minW;
   const h = Math.max(item.h, minH);
-  /** Live chat iframe only: no resize handles so RGL does not stack invisible hit targets above the embed (Twitch disables mod chat when “obscured”). */
-  const iframeDock = id === "liveChat";
-  return { ...item, minH, minW, h, ...(iframeDock ? { isResizable: false } : {}) };
+  return { ...item, minH, minW, h };
 }
 
 const LAYOUT_BP_KEYS: (keyof Layouts)[] = ["lg", "md", "sm", "xs", "xxs"];

@@ -129,17 +129,8 @@ function parseVolumePercentFromArgsTail(raw: string): number | null {
   return n;
 }
 
-function formatOutgoingReply(text: string, settings: BotSettings): string {
-  const t = text.trim();
-  if (!t) return t;
-  /**
-   * `prefixRepliesAsHelper === false` (default) → prefix with StreamCoreHelper so chat can tell
-   * bot output apart. `true` → raw line (still sent via your Twitch IRC session).
-   */
-  if (!settings.prefixRepliesAsHelper) {
-    return `StreamCoreHelper · ${t}`;
-  }
-  return t;
+function formatOutgoingReply(text: string, _settings: BotSettings): string {
+  return text.trim();
 }
 
 function buildHelpReply(prefix: string, catalog: BotCommand[]): string {

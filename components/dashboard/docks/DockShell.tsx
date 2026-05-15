@@ -6,52 +6,65 @@ import { Lock, Unlock, X } from "lucide-react";
 
 export function DockShell({
   title,
+  actions,
   right,
   children,
   className,
   contentClassName,
-  /** Twitch/iframe docks: no outer scroll, no padding — avoids covering the embed hit target. */
+  chrome = "default",
   bodyMode = "default",
   dragHandleProps,
   onClose,
   dockLocked,
   onToggleDockLock
 }: {
-  title: string;
+  title: React.ReactNode;
+  actions?: React.ReactNode;
   right?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   contentClassName?: string;
+  chrome?: "default" | "embed-clean";
   bodyMode?: "default" | "embed";
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   onClose?: () => void;
-  /** This dock only — locked = cannot drag/resize the tile */
   dockLocked?: boolean;
   onToggleDockLock?: () => void;
 }) {
+  const embedClean = chrome === "embed-clean";
+
   return (
     <Card
       className={cn(
         "flex h-full min-h-0 flex-col overflow-hidden border border-white/10",
-        /* ~80% transparent glass (20% surface) + single blur pass */
-        "bg-black/20 backdrop-blur-xl ring-1 ring-white/[0.08]",
+        embedClean
+          ? "bg-[#0a0a0c] ring-1 ring-white/[0.06]"
+          : "bg-black/20 backdrop-blur-xl ring-1 ring-white/[0.08]",
         className
       )}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-        {/* Drag only from the title — not from lock/close (fixes flaky clicks vs react-draggable). */}
+      <div
+        className={cn(
+          "flex shrink-0 items-center justify-between gap-2 border-b border-white/10",
+          embedClean ? "bg-[#0a0a0c] px-3 py-2" : "px-4 py-3"
+        )}
+      >
         <div
           {...(!dockLocked ? dragHandleProps : {})}
           className={cn(
-            "min-w-0 flex-1 select-none rounded-md px-1 py-0.5 -mx-1 -my-0.5",
+            "min-w-0 flex-1 select-none rounded-md",
+            embedClean ? "px-0.5 py-0.5" : "px-1 py-0.5 -mx-1 -my-0.5",
             dockLocked ? "cursor-default" : "sv-drag-handle cursor-grab active:cursor-grabbing",
             !dockLocked ? dragHandleProps?.className : undefined
           )}
         >
-          <div className="text-sm font-semibold text-white">{title}</div>
+          <div className={cn("font-semibold text-white", embedClean ? "text-xs tracking-wide" : "text-sm")}>
+            {title}
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           {right}
+          {actions}
           {onToggleDockLock ? (
             <button
               type="button"
@@ -89,7 +102,7 @@ export function DockShell({
         className={cn(
           "min-h-0 flex-1",
           bodyMode === "embed"
-            ? "flex flex-col overflow-hidden p-0"
+            ? cn("relative flex flex-col overflow-hidden p-0", embedClean && "sv-dock-embed-body")
             : "overflow-y-auto p-4",
           contentClassName
         )}
@@ -99,4 +112,3 @@ export function DockShell({
     </Card>
   );
 }
-

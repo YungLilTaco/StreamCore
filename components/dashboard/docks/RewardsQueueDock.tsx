@@ -4,34 +4,10 @@ import * as React from "react";
 import { Check, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
 import { DockShell } from "@/components/dashboard/docks/DockShell";
 import { useSelectedChannel } from "@/components/app/SelectedChannelProvider";
+import { useChannelLogin } from "@/components/dashboard/docks/useChannelLogin";
 import { Button } from "@/components/ui/button";
+import { openTwitchRewardQueueWindow } from "@/lib/twitch-chat-portal";
 import { cn } from "@/components/lib/cn";
-
-function useChannelLogin(channelTwitchId: string | null, ready: boolean): string | null {
-  const [login, setLogin] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    if (!ready || !channelTwitchId) {
-      setLogin(null);
-      return;
-    }
-    let cancelled = false;
-    fetch(`/api/twitch/channel-info?channelTwitchId=${encodeURIComponent(channelTwitchId)}`, {
-      cache: "no-store"
-    })
-      .then(async (r) => (r.ok ? ((await r.json()) as { channel?: { broadcaster_login?: string } }) : null))
-      .then((json) => {
-        if (cancelled || !json?.channel?.broadcaster_login) return;
-        setLogin(json.channel.broadcaster_login);
-      })
-      .catch(() => {
-        if (!cancelled) setLogin(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, channelTwitchId]);
-  return login;
-}
 
 type RewardQueueItemDTO = {
   id: string;
@@ -147,11 +123,8 @@ export function RewardsQueueDock({
     return () => window.clearInterval(id);
   }, [ready, channelTwitchId, load]);
 
-  const popoutHref = channelLogin
-    ? `https://www.twitch.tv/popout/${encodeURIComponent(channelLogin)}/reward-queue`
-    : null;
-
   return (
+    <div className="sv-reward-queue-dock-root flex h-full min-h-0 w-full flex-col">
     <DockShell
       title="Reward queue"
       bodyMode="embed"
@@ -174,6 +147,15 @@ export function RewardsQueueDock({
               <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
+            <button
+              type="button"
+              data-rgl-no-drag
+              onClick={() => openTwitchRewardQueueWindow(channelLogin)}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-[11px] font-semibold text-primary transition hover:bg-primary/25"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Pop out
+            </button>
             <a
               href={`https://dashboard.twitch.tv/u/${encodeURIComponent(channelLogin)}/community/channel-points`}
               target="_blank"
@@ -198,10 +180,15 @@ export function RewardsQueueDock({
           <div className="border-b border-white/10 bg-black/25 px-3 py-2 text-[11px] leading-snug text-white/50">
             Unfulfilled redemptions for your channel (Helix). To accept or reject rewards in Twitch’s
             full UI, use{" "}
-            {popoutHref ? (
-              <a href={popoutHref} target="_blank" rel="noopener noreferrer" className="text-cyan-200/90 underline">
+            {channelLogin ? (
+              <button
+                type="button"
+                data-rgl-no-drag
+                onClick={() => openTwitchRewardQueueWindow(channelLogin)}
+                className="text-cyan-200/90 underline hover:text-cyan-100"
+              >
                 reward queue pop-out
-              </a>
+              </button>
             ) : (
               "reward queue pop-out"
             )}
@@ -283,5 +270,6 @@ export function RewardsQueueDock({
         </div>
       </div>
     </DockShell>
+    </div>
   );
 }

@@ -3,6 +3,7 @@ import Twitch from "next-auth/providers/twitch";
 import Spotify from "next-auth/providers/spotify";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
+import { SPOTIFY_OAUTH_SCOPE_STRING } from "@/lib/spotify-oauth";
 
 const twitchScopes = [
   "openid",
@@ -47,15 +48,7 @@ const twitchScopes = [
  * `params` (see @auth/core `lib/utils/merge.js` + `lib/utils/providers.js`).
  */
 const spotifyAuthorizeUrl = "https://accounts.spotify.com/authorize";
-
-const spotifyScopes = [
-  "user-read-email",
-  "user-read-currently-playing",
-  "user-modify-playback-state",
-  "user-read-playback-state",
-  "user-library-read",
-  "user-library-modify"
-].join(" ");
+const spotifyScopes = SPOTIFY_OAUTH_SCOPE_STRING;
 
 /** Auth.js `setEnvDefaults` passes these when using a provider factory (see `AUTH_SPOTIFY_*`). */
 type AuthProviderEnvInject = {
@@ -151,8 +144,7 @@ export const authConfig = {
         const updated = await prisma.account.updateMany({
           where: {
             userId: user.id,
-            provider: account.provider,
-            providerAccountId: account.providerAccountId
+            provider: account.provider
           },
           data: {
             access_token: account.access_token,
