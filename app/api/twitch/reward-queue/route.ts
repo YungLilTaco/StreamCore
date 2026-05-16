@@ -31,6 +31,8 @@ export type RewardQueueItemDTO = {
   userName?: string;
   redeemedAt: string;
   status: string;
+  userInput?: string;
+  cost?: number;
 };
 
 /**
@@ -72,7 +74,7 @@ export async function GET(req: Request) {
     return Response.json({ message: t || "Failed to load rewards" }, { status: rewardsRes.status });
   }
 
-  const rewardsJson = (await rewardsRes.json()) as { data?: { id: string; title?: string }[] };
+  const rewardsJson = (await rewardsRes.json()) as { data?: { id: string; title?: string; cost?: number }[] };
   const rewards = rewardsJson.data ?? [];
 
   const items: RewardQueueItemDTO[] = [];
@@ -96,6 +98,7 @@ export async function GET(req: Request) {
           user_login?: string;
           user_name?: string;
           redeemed_at?: string;
+          user_input?: string;
           reward?: { id?: string; title?: string };
         }[];
       };
@@ -107,7 +110,9 @@ export async function GET(req: Request) {
           userLogin: row.user_login,
           userName: row.user_name,
           redeemedAt: row.redeemed_at ?? "",
-          status: "UNFULFILLED"
+          status: "UNFULFILLED",
+          userInput: row.user_input?.trim() || undefined,
+          cost: typeof reward.cost === "number" ? reward.cost : undefined
         });
       }
     })

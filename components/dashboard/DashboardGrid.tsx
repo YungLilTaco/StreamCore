@@ -16,6 +16,7 @@ import {
   parseDockLocksJson,
   parseStoredLayouts,
   replicateLayoutToAllBreakpoints,
+  sanitizeVisibleDockKeys,
   serializeLayouts,
   type DashboardDockKey,
   type DockLocksState
@@ -23,7 +24,6 @@ import {
 
 import { StreamPreviewDock } from "@/components/dashboard/docks/StreamPreviewDock";
 import { ChatDock } from "@/components/dashboard/docks/ChatDock";
-import { RewardsQueueDock } from "@/components/dashboard/docks/RewardsQueueDock";
 import { ActivityFeedDock } from "@/components/dashboard/docks/ActivityFeedDock";
 import { QuickActionsDock } from "@/components/dashboard/docks/QuickActionsDock";
 import { QuickClipDock } from "@/components/dashboard/docks/QuickClipDock";
@@ -38,7 +38,6 @@ type DockKey = DashboardDockKey;
 const DOCKS: { key: DockKey; name: string }[] = [
   { key: "streamPreview", name: "Stream Preview" },
   { key: "liveChat", name: "Live Stream Chat" },
-  { key: "rewardsQueue", name: "Reward Queue" },
   { key: "activityFeed", name: "Activity Feed" },
   { key: "quickActions", name: "Quick Actions" },
   { key: "quickClip", name: "Quick Clip" },
@@ -592,7 +591,10 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
           const normalized = normalizeDashboardLayouts(parsed);
           setLayouts(replicateLayoutToAllBreakpoints(normalized.lg ?? []));
         }
-        if (rawVisible) setVisible(JSON.parse(rawVisible) as DockKey[]);
+        if (rawVisible) {
+          const parsed = JSON.parse(rawVisible) as string[];
+          setVisible(sanitizeVisibleDockKeys(Array.isArray(parsed) ? parsed : []));
+        }
         if (rawLocked) {
           if (rawLocked === "0" || rawLocked === "1") setDockLocks({});
           else if (rawLocked.startsWith("{")) setDockLocks(parseDockLocksJson(rawLocked));
@@ -677,7 +679,7 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
           if (!layout) return;
           try {
             const nextLayouts = parseStoredLayouts(layout.layoutsJson);
-            const nextVisible = JSON.parse(layout.visibleJson) as DockKey[];
+            const nextVisible = sanitizeVisibleDockKeys(JSON.parse(layout.visibleJson) as string[]);
             if (nextLayouts) {
               setLayouts(replicateLayoutToAllBreakpoints(normalizeDashboardLayouts(nextLayouts).lg ?? []));
             }
@@ -726,7 +728,9 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
           } as Layouts;
         }
         if (payload.visibleJson !== undefined) {
-          lastPersistedVisibleRef.current = JSON.parse(String(payload.visibleJson)) as DockKey[];
+          lastPersistedVisibleRef.current = sanitizeVisibleDockKeys(
+            JSON.parse(String(payload.visibleJson)) as string[]
+          );
         }
         if (typeof payload.docksLockedJson === "string") {
           lastPersistedDockLocksRef.current = payload.docksLockedJson;
@@ -1323,15 +1327,6 @@ export const DashboardGrid = React.forwardRef<DashboardGridHandle, DashboardGrid
                   onClose={() => hideDock("liveChat")}
                   dockLocked={Boolean(dockLocks.liveChat)}
                   onToggleDockLock={() => toggleDockLock("liveChat")}
-                />
-              </div>
-            ) : null}
-            {visible.includes("rewardsQueue") ? (
-              <div key="rewardsQueue" className={shrinkClass("rewardsQueue")}>
-                <RewardsQueueDock
-                  onClose={() => hideDock("rewardsQueue")}
-                  dockLocked={Boolean(dockLocks.rewardsQueue)}
-                  onToggleDockLock={() => toggleDockLock("rewardsQueue")}
                 />
               </div>
             ) : null}

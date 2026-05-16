@@ -4,9 +4,9 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  // App / Prisma Client (e.g. transaction pooler :6543 + pgbouncer=true)
+  // App / Prisma Client (e.g. transaction pooler :6543 + pgbouncer=true) — see `lib/prisma.ts` runtime URL tweaks
   url       = env("DATABASE_URL")
-  // Prisma Migrate only — avoids hangs on transaction pooler; use session pooler or direct DB URI
+  // Prisma Migrate — session/direct URI; avoid transaction pooler for migrations (see `.env.example`)
   directUrl = env("DIRECT_URL")
 }
 
@@ -178,6 +178,29 @@ model ChatMessageArchive {
   @@index([channelTwitchId, userTwitchId, ts])
   @@index([channelTwitchId, userLogin, ts])
   @@index([channelTwitchId, ts])
+}
+
+/**
+ * Channel point redemptions (EventSub → DB). `twitchRedemptionId` is Twitch’s redemption id for Helix.
+ */
+model ChannelRedemption {
+  id                  String   @id @default(uuid())
+  twitchRedemptionId  String   @unique
+  channelTwitchId     String
+  rewardId            String
+  userName            String   @map("user_name")
+  userLogin           String?  @map("user_login")
+  rewardTitle         String   @map("reward_title")
+  userInput           String?  @map("user_input")
+  cost                Int      @default(0)
+  status              String   @default("UNFULFILLED") @map("status")
+  redeemedAt          DateTime? @map("redeemed_at")
+
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@index([channelTwitchId, status])
+  @@map("channel_redemptions")
 }
 
 model PermissionInvite {

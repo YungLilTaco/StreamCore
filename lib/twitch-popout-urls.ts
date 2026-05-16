@@ -13,12 +13,8 @@ export function twitchPopoutChatUrl(broadcasterLogin: string): string {
 export function twitchEmbedChatUrl(broadcasterLogin: string, parentQs?: string): string {
   const login = broadcasterLogin.trim().toLowerCase();
   const parents = parentQs?.trim() || twitchParentQueryString();
+  const suffix = "darkpopout=true&migration=true";
   return parents
-    ? `https://www.twitch.tv/embed/${encodeURIComponent(login)}/chat?${parents}&darkpopout`
-    : `https://www.twitch.tv/embed/${encodeURIComponent(login)}/chat?darkpopout`;
-}
-
-export function twitchPopoutRewardQueueUrl(broadcasterLogin: string): string {
-  const login = broadcasterLogin.trim().toLowerCase();
-  return `https://www.twitch.tv/popout/${encodeURIComponent(login)}/reward-queue?popout=`;
+    ? `https://www.twitch.tv/embed/${encodeURIComponent(login)}/chat?${parents}&${suffix}`
+    : `https://www.twitch.tv/embed/${encodeURIComponent(login)}/chat?${suffix}`;
 }

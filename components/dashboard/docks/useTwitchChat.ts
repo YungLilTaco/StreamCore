@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { twitchParentQueryString } from "@/lib/twitch-embed-parents";
+import { twitchEmbedChatUrl } from "@/lib/twitch-popout-urls";
 import { parseIrcLine, sanitizeChatText } from "@/lib/twitch-irc";
 
 const IRC_URL = "wss://irc-ws.chat.twitch.tv:443";
@@ -31,6 +33,28 @@ const ARCHIVE_BATCH_CAP = 50;
  */
 const BACKFILL_THROTTLE_MS = 60 * 60 * 1000;
 const BACKFILL_STORAGE_KEY_PREFIX = "sv_chat_backfill_at_v1_";
+
+/** Lowercase Twitch login: strip `#`, drop characters outside `[a-z0-9_]`. */
+export function sanitizeTwitchChannelLogin(raw: string | null | undefined): string {
+  if (!raw?.trim()) return "";
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/^#+/, "")
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+/**
+ * Official embed chat `src` with CSP-safe `parent=` (includes `localhost` first for local dev).
+ * Use from embed URL builders / any host so channel + parents stay aligned with IRC joins.
+ */
+export function resolvedTwitchEmbedChatSrc(broadcasterLogin: string | null | undefined): string | null {
+  const login = sanitizeTwitchChannelLogin(broadcasterLogin);
+  if (!login) return null;
+  const parentQs = twitchParentQueryString();
+  if (!parentQs.trim()) return null;
+  return twitchEmbedChatUrl(login, parentQs);
+}
 
 type ArchiveRow = {
   ircId: string;
@@ -511,6 +535,8 @@ export function useTwitchChat({
           return;
         }
         creds = (await r.json()) as ChatCredentials;
+        creds.channelLogin = sanitizeTwitchChannelLogin(creds.channelLogin);
+        creds.userLogin = sanitizeTwitchChannelLogin(creds.userLogin);
       } catch (e) {
         setStatus({ phase: "error", message: (e as Error).message || "Network error" });
         scheduleReconnect();

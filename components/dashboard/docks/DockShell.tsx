@@ -13,6 +13,10 @@ export function DockShell({
   contentClassName,
   chrome = "default",
   bodyMode = "default",
+  /** When true with `bodyMode="embed"`, omits `relative` on the body so nothing creates a stacking context over embeds (Twitch chat “obscured” guard). */
+  embedBodyStaticRoot = false,
+  /** When `"auto"`, the title/actions header row receives `pointer-events-auto` (Twitch chat dock isolation). */
+  pointerEventsHeader,
   dragHandleProps,
   onClose,
   dockLocked,
@@ -26,6 +30,8 @@ export function DockShell({
   contentClassName?: string;
   chrome?: "default" | "embed-clean";
   bodyMode?: "default" | "embed";
+  embedBodyStaticRoot?: boolean;
+  pointerEventsHeader?: "auto";
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   onClose?: () => void;
   dockLocked?: boolean;
@@ -46,7 +52,8 @@ export function DockShell({
       <div
         className={cn(
           "flex shrink-0 items-center justify-between gap-2 border-b border-white/10",
-          embedClean ? "bg-[#0a0a0c] px-3 py-2" : "px-4 py-3"
+          embedClean ? "bg-[#0a0a0c] px-3 py-2" : "px-4 py-3",
+          pointerEventsHeader === "auto" && "pointer-events-auto"
         )}
       >
         <div
@@ -102,7 +109,11 @@ export function DockShell({
         className={cn(
           "min-h-0 flex-1",
           bodyMode === "embed"
-            ? cn("relative flex flex-col overflow-hidden p-0", embedClean && "sv-dock-embed-body")
+            ? cn(
+                "flex min-h-0 flex-1 flex-col overflow-hidden p-0",
+                !embedBodyStaticRoot && "relative",
+                embedClean && "sv-dock-embed-body"
+              )
             : "overflow-y-auto p-4",
           contentClassName
         )}

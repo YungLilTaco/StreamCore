@@ -3,7 +3,6 @@ import type { Layout, Layouts } from "react-grid-layout";
 export type DashboardDockKey =
   | "streamPreview"
   | "liveChat"
-  | "rewardsQueue"
   | "activityFeed"
   | "quickActions"
   | "quickClip"
@@ -38,7 +37,6 @@ export const DOCK_GRID_METRICS: Record<
 > = {
   streamPreview: { minH: 14, h: 14, minW: 3 },
   liveChat: { minH: 12, h: 12, minW: 3 },
-  rewardsQueue: { minH: 10, h: 12, minW: 3 },
   activityFeed: { minH: 12, h: 12, minW: 2 },
   quickActions: { minH: 12, h: 12, minW: 3 },
   quickClip: { minH: 8, h: 8, minW: 2 },
@@ -60,7 +58,6 @@ export type DockLocksState = Partial<Record<DashboardDockKey, boolean>>;
 const DOCK_KEY_SET = new Set<string>([
   "streamPreview",
   "liveChat",
-  "rewardsQueue",
   "activityFeed",
   "quickActions",
   "quickClip",
@@ -68,6 +65,15 @@ const DOCK_KEY_SET = new Set<string>([
   "soundMixer",
   "streamInfo"
 ]);
+
+export function isDashboardDockKey(k: string): k is DashboardDockKey {
+  return DOCK_KEY_SET.has(k);
+}
+
+/** Drop removed / unknown dock keys from persisted `visible` arrays. */
+export function sanitizeVisibleDockKeys(keys: string[]): DashboardDockKey[] {
+  return keys.filter((k): k is DashboardDockKey => DOCK_KEY_SET.has(k));
+}
 
 export function parseDockLocksJson(raw: string | null | undefined): DockLocksState {
   if (!raw?.trim()) return {};
@@ -119,7 +125,11 @@ export function normalizeDashboardLayoutItem(item: Layout): Layout {
   const minH = meta.minH;
   const minW = meta.minW;
   const h = Math.max(item.h, minH);
-  return { ...item, minH, minW, h };
+  const next: Layout = { ...item, minH, minW, h };
+  if (id === "liveChat") {
+    next.resizeHandles = ["s", "n", "w", "e", "sw", "se", "nw", "ne"];
+  }
+  return next;
 }
 
 const LAYOUT_BP_KEYS: (keyof Layouts)[] = ["lg", "md", "sm", "xs", "xxs"];
@@ -129,7 +139,9 @@ export function normalizeDashboardLayouts(layouts: Layouts): Layouts {
   const out = {} as Layouts;
   for (const bp of LAYOUT_BP_KEYS) {
     const arr = layouts[bp] as Layout[] | undefined;
-    out[bp] = (arr ?? []).map(normalizeDashboardLayoutItem) as Layout[];
+    out[bp] = (arr ?? [])
+      .filter((it) => DOCK_KEY_SET.has(String(it.i)))
+      .map(normalizeDashboardLayoutItem) as Layout[];
   }
   return out;
 }
@@ -140,7 +152,9 @@ export function normalizeDashboardLayouts(layouts: Layouts): Layouts {
  * all breakpoints.
  */
 export function replicateLayoutToAllBreakpoints(layout: Layout[]): Layouts {
-  const cleaned = layout.map(normalizeDashboardLayoutItem) as Layout[];
+  const cleaned = layout
+    .filter((it) => DOCK_KEY_SET.has(String(it.i)))
+    .map(normalizeDashboardLayoutItem) as Layout[];
   const out = {} as Layouts;
   for (const bp of LAYOUT_BP_KEYS) {
     out[bp] = cleaned.map((item) => ({ ...item }));

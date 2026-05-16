@@ -29,8 +29,15 @@ export function twitchEmbedParentHostnames(): string[] {
   return [...hosts];
 }
 
+/**
+ * `parent=` query for Twitch embed CSP. **`localhost` is always first** so local dev explicitly
+ * satisfies Twitch’s parent allowlist even when other hosts are present.
+ */
 export function twitchParentQueryString(): string {
-  return twitchEmbedParentHostnames()
-    .map((p) => `parent=${encodeURIComponent(p)}`)
-    .join("&");
+  const hosts = twitchEmbedParentHostnames();
+  const ordered = new Set<string>(["localhost", "127.0.0.1"]);
+  for (const h of hosts) {
+    if (h) ordered.add(h);
+  }
+  return [...ordered].map((p) => `parent=${encodeURIComponent(p)}`).join("&");
 }

@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getProviderAccessToken } from "@/lib/tokens";
+import { deleteRedemptionByTwitchId } from "@/lib/channel-redemptions";
 
 function twitchHeaders(accessToken: string): Record<string, string> {
   const clientId = process.env.TWITCH_CLIENT_ID ?? "";
@@ -89,5 +90,6 @@ export async function PATCH(req: Request) {
     const t = await res.text().catch(() => "");
     return Response.json({ message: t || `Twitch ${res.status}` }, { status: res.status });
   }
+  await deleteRedemptionByTwitchId(redemptionId, channelTwitchId).catch(() => {});
   return Response.json({ ok: true });
 }

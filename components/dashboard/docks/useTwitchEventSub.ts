@@ -437,6 +437,18 @@ export function useTwitchEventSub({
           const row = eventSubPayloadToActivityRow(type, msg);
           if (!row) return;
           pushLive(row);
+
+          if (type === "channel.channel_points_custom_reward_redemption.add" && channelTwitchId) {
+            const ev = msg.payload?.event;
+            if (ev && typeof ev === "object") {
+              void fetch("/api/twitch/channel-redemptions/ingest", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ channelTwitchId, event: ev })
+              }).catch(() => {});
+            }
+          }
           return;
         }
 

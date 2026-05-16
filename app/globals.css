@@ -197,18 +197,85 @@ body {
 }
 
 /*
- * In-dock Twitch embed: RGL resize handles sit above the iframe (z-index 5–6). Twitch treats that
- * as “obscured” and blocks mod/broadcaster typing. Disable handles only while embed is active;
- * the default portal screen can still be resized normally (including bottom edge).
+ * Live Chat dock embed (`ChatDock.tsx` → `EmbedChatFrame`):
+ * - Bottom gutter + south handle mapping so the south strip aligns with the in-dock gutter.
+ * - East/west handles: pointer-events none so strips do not “obscure” the iframe.
+ * - While embed is mounted: dock wrapper `z-index` above resize handles + `isolation` so the
+ *   Twitch iframe receives clicks (RGL renders handles after the dock in DOM order). South/SE/SW
+ *   gutter presets use z-50/51 — live-chat rules cap every handle below the dock.
  */
-.react-grid-item:has([data-sv-chat-mode="embed"]) > .react-resizable-handle {
-  pointer-events: none !important;
-  opacity: 0 !important;
+.react-grid-item:has([data-sv-external-gutter-dock]) {
+  z-index: 8;
 }
 
-body[data-dragging] [data-sv-chat-mode="embed"] iframe,
-body[data-resize-axis] [data-sv-chat-mode="embed"] iframe {
-  pointer-events: none;
+.react-grid-item:has([data-sv-external-gutter-dock]) > .react-resizable-handle-s {
+  position: absolute !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: auto !important;
+  width: auto !important;
+  height: 14px !important;
+  z-index: 50 !important;
+  cursor: ns-resize !important;
+}
+
+.react-grid-item:has([data-sv-external-gutter-dock]) > .react-resizable-handle-se,
+.react-grid-item:has([data-sv-external-gutter-dock]) > .react-resizable-handle-sw {
+  bottom: 0 !important;
+  top: auto !important;
+  width: 14px !important;
+  height: 14px !important;
+  z-index: 51 !important;
+}
+
+.react-grid-item:has([data-sv-external-gutter-dock]) > .react-resizable-handle-e,
+.react-grid-item:has([data-sv-external-gutter-dock]) > .react-resizable-handle-w {
+  width: 4px !important;
+  bottom: 14px !important;
+}
+
+/*
+ * East/west strips still overlap the iframe horizontally; let events reach the iframe.
+ * Resize width via south-east / south-west (and south).
+ */
+.react-grid-item:has([data-sv-live-chat-dock]) > .react-resizable-handle-e,
+.react-grid-item:has([data-sv-live-chat-dock]) > .react-resizable-handle-w {
+  pointer-events: none !important;
+}
+
+/*
+ * RGL appends resize handles *after* the dock in the DOM. They paint above the tile by default,
+ * so pointer events never reach the cross-origin Twitch iframe (it looks “loaded” but you
+ * cannot focus or type). While the embed is mounted, stack the dock body above the handles.
+ *
+ * `data-sv-external-gutter-dock` rules above set south/SE/SW to z-50/51 — without a hard cap those
+ * can beat the generic handle rule and sit above the dock again. We force every handle class
+ * below the dock wrapper (z-80) and keep E/W at pointer-events: none (separate rule above).
+ *
+ * Tradeoff: you cannot drag the grid’s resize strips through the dock while preview is open —
+ * use **Back** to return to the portal screen, resize the tile, then open “Preview in dock” again.
+ */
+.react-grid-item:has([data-sv-live-chat-dock]) > *:first-child {
+  position: relative;
+  z-index: 80 !important;
+  isolation: isolate;
+  pointer-events: auto;
+}
+
+.react-grid-item:has([data-sv-live-chat-dock]) > .react-resizable-handle-n,
+.react-grid-item:has([data-sv-live-chat-dock]) > .react-resizable-handle-s,
+.react-grid-item:has([data-sv-live-chat-dock]) > .react-resizable-handle-e,
+.react-grid-item:has([data-sv-live-chat-dock]) > .react-resizable-handle-w,
+.react-grid-item:has([data-sv-live-chat-dock]) > .react-resizable-handle-ne,
+.react-grid-item:has([data-sv-live-chat-dock]) > .react-resizable-handle-nw,
+.react-grid-item:has([data-sv-live-chat-dock]) > .react-resizable-handle-se,
+.react-grid-item:has([data-sv-live-chat-dock]) > .react-resizable-handle-sw {
+  z-index: 35 !important;
+}
+
+.react-grid-item:has([data-sv-live-chat-dock]) iframe {
+  pointer-events: auto !important;
 }
 
 .sv-dock-menu-panel {
